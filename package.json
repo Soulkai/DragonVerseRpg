@@ -1,0 +1,24 @@
+{
+  "name": "dragonverse-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp para RPG de Dragon Ball usando whatsapp-web.js e SQLite.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "whatsapp-web.js",
+    "dragon-ball",
+    "rpg",
+    "sqlite"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "dotenv": "^16.4.7",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.31.0"
+  }
+}
