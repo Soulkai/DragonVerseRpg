@@ -61,6 +61,46 @@ function addZenies(message, argsText) {
   };
 }
 
+function retirarZenies(message, argsText) {
+  const permission = requireAdmin(message);
+  if (!permission.ok) return permission;
+
+  const targetWhatsappId = getFirstMentionedId(message, argsText);
+  if (!targetWhatsappId) {
+    return { ok: false, message: 'Use assim: */retirarzenies @pessoa valor*' };
+  }
+
+  const rest = removeFirstMention(argsText);
+  const amount = parseAmount(rest.split(/\s+/)[0]);
+  if (!amount || amount <= 0) {
+    return { ok: false, message: 'Informe um valor válido. Exemplo: */retirarzenies @pessoa 50000000*' };
+  }
+
+  const target = getOrCreatePlayerByWhatsAppId(targetWhatsappId, null, { touch: false });
+  const discount = Math.min(Number(target.zenies || 0), amount);
+
+  db.prepare(`
+    UPDATE players
+    SET zenies = MAX(zenies - ?, 0),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(amount, target.id);
+
+  const updated = getPlayerByWhatsAppId(targetWhatsappId);
+
+  return {
+    ok: true,
+    message: [
+      '✅ *Zenies retirados!*',
+      '',
+      `👤 Jogador: @${updated.phone}`,
+      `➖ Valor solicitado: *${money(amount)} Zenies*`,
+      `💸 Valor retirado: *${money(discount)} Zenies*`,
+      `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
+    ].join('\n'),
+  };
+}
+
 function definirKi(message, argsText) {
   const permission = requireAdmin(message);
   if (!permission.ok) return permission;
@@ -224,6 +264,7 @@ function runEconomyMaintenance() {
 
 module.exports = {
   addZenies,
+  retirarZenies,
   definirKi,
   depositar,
   applyDueSalaries,

@@ -12,6 +12,12 @@ Bot para RPG de Dragon Ball usando **Node.js**, **whatsapp-web.js** e **SQLite**
 - Sistema de cargos principais, cargos supremos e trabalhos secundários.
 - Salário automático a cada 2 dias.
 - Depósito com juros de 25% a cada 4 dias.
+- Loja com compra de Ki e itens especiais.
+- Inventário SQL para guardar itens comprados.
+- Sistema de eventos manuais com limite diário.
+- Perguntas de Dragon Ball com alternativas A, B, C e D.
+- Forca de Dragon Ball.
+- Eventos automáticos de emoji do dragão e pergunta relâmpago.
 - Remoção automática do personagem após 3 meses de inatividade.
 - Perfil com foto, personagem, Ki, atributos totais, Zenies, depósito, cargo, trabalho e salário.
 
@@ -35,6 +41,14 @@ ADMIN_NUMBERS=5567999999999,5567888888888
 
 Admins do `.env` podem usar os comandos administrativos mesmo sem cargo dentro do RPG.
 
+## Configuração de fuso horário
+
+O bot usa o fuso horário para resetar limites diários de eventos:
+
+```env
+TIMEZONE=America/Campo_Grande
+```
+
 ## Comandos de jogador
 
 ```txt
@@ -42,8 +56,21 @@ Admins do `.env` podem usar os comandos administrativos mesmo sem cargo dentro d
 /Registro 2 Goku
 /Registro 2 Bardock DBV-XXXXXX-XXXX
 /Perfil
+/loja
+/comprar Ki
+/comprar Scouter
+/comprar Semente dos Deuses
+/inventario
 /depositar 50000000
 /cargos
+/eventos
+/eventos pergunta
+/eventos forca
+/eventos desafio
+/responder A
+/letra A
+/chutar Kamehameha
+/pegar
 /help
 ```
 
@@ -51,11 +78,194 @@ Admins do `.env` podem usar os comandos administrativos mesmo sem cargo dentro d
 
 ```txt
 /addzenies @pessoa 50000000
+/retirarzenies @pessoa 50000000
 /definirki @pessoa 5
 /addcargo @pessoa A.S
 /adduniverso 3
 /codigoresgate 2 Bardock
+/eventos ativar
+/eventos desativar
 ```
+
+## Eventos
+
+Use:
+
+```txt
+/eventos
+```
+
+O bot mostra a lista de eventos e o status diário do jogador.
+
+### Eventos manuais
+
+Cada jogador pode participar de até **10 eventos manuais por dia**.
+
+Cada acerto vale:
+
+```txt
+10.000.000 Zenies
+```
+
+Máximo diário em eventos manuais:
+
+```txt
+100.000.000 Zenies
+```
+
+Se errar, não ganha nada e o evento é encerrado.
+
+### Perguntas e respostas
+
+```txt
+/eventos pergunta
+/responder A
+```
+
+O bot sorteia uma pergunta de Dragon Ball com alternativas A, B, C e D.
+
+### Forca
+
+```txt
+/eventos forca
+/letra A
+/chutar Kamehameha
+```
+
+O bot sorteia uma palavra de Dragon Ball. O jogador tem 6 erros possíveis.
+
+### Desafio rápido
+
+```txt
+/eventos desafio
+/responder B
+```
+
+O bot sorteia uma situação rápida do RPG para o jogador resolver.
+
+### Eventos automáticos
+
+Para ativar eventos automáticos no grupo atual, um admin usa:
+
+```txt
+/eventos ativar
+```
+
+Para desativar:
+
+```txt
+/eventos desativar
+```
+
+#### Pegue o emoji
+
+A cada hora, o bot pode mandar um emoji de dragão no chat:
+
+```txt
+🐉
+```
+
+O primeiro jogador que mandar:
+
+```txt
+/pegar
+```
+
+ganha:
+
+```txt
+5.000.000 Zenies
+```
+
+O bot envia no máximo **10 emojis por dia por chat**.
+
+#### Pergunta relâmpago
+
+Em 3 horários do dia, o bot pode mandar uma pergunta aleatória.
+
+O primeiro jogador que responder corretamente com:
+
+```txt
+/responder A
+```
+
+ganha:
+
+```txt
+25.000.000 Zenies
+```
+
+Por padrão, as perguntas relâmpago são tentadas nos horários locais:
+
+```txt
+10h, 16h e 21h
+```
+
+## Loja
+
+Use:
+
+```txt
+/loja
+```
+
+O bot mostra a tabela de Ki e os itens disponíveis.
+
+### Comprar Ki
+
+```txt
+/comprar Ki
+```
+
+Esse comando compra sempre o **próximo Ki** do jogador.
+
+Tabela de preços:
+
+```txt
+Ki 01 = grátis
+Ki 02 = 150.000.000 Zenies
+Ki 03 = 250.000.000 Zenies
+Ki 04 = 320.000.000 Zenies
+Ki 05 = 550.000.000 Zenies
+Ki 06 = 700.000.000 Zenies
+Ki 07 = 920.000.000 Zenies
+Ki 08 = 1.000.000.000 Zenies
+Ki 09 = 1.500.000.000 Zenies
+Ki 10 = 2.000.000.000 Zenies
+Ki 11+ = 2.000.000.000 Zenies por nível
+```
+
+### Itens da loja
+
+```txt
+Semente dos Deuses = 2.000.000.000 Zenies
+Scouter = 70.000.000 Zenies
+Nave Espacial = 700.000.000 Zenies
+Cauda Saiyajin = 200.000.000 Zenies
+Nuvem Voadora = 200.000.000 Zenies
+```
+
+Exemplos:
+
+```txt
+/comprar Scouter
+/comprar Nave Espacial
+/comprar Cauda Saiyajin
+/comprar Nuvem Voadora
+/comprar Semente dos Deuses
+```
+
+Os itens comprados ficam salvos em `player_inventory`.
+
+## Inventário
+
+Use:
+
+```txt
+/inventario
+```
+
+O bot mostra quantos itens o jogador possui.
 
 ## Permissões de cargos
 
@@ -138,6 +348,22 @@ O SQLite é criado automaticamente em:
 
 ```txt
 data/dragonverse.sqlite
+```
+
+Tabelas principais:
+
+```txt
+universes
+characters
+players
+character_claims
+rescue_codes
+player_inventory
+purchase_history
+event_daily_stats
+event_chats
+event_chat_daily_stats
+active_events
 ```
 
 ## Fotos dos personagens

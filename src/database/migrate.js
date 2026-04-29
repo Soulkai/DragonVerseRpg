@@ -88,6 +88,91 @@ function migrate() {
       FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE,
       FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS player_inventory (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      item_id TEXT NOT NULL,
+      item_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, item_id),
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS purchase_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      purchase_type TEXT NOT NULL,
+      target_id TEXT NOT NULL,
+      target_name TEXT NOT NULL,
+      price INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS event_daily_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      date_key TEXT NOT NULL,
+      manual_participations INTEGER NOT NULL DEFAULT 0,
+      manual_wins INTEGER NOT NULL DEFAULT 0,
+      manual_reward_total INTEGER NOT NULL DEFAULT 0,
+      emoji_claims INTEGER NOT NULL DEFAULT 0,
+      emoji_reward_total INTEGER NOT NULL DEFAULT 0,
+      auto_quiz_wins INTEGER NOT NULL DEFAULT 0,
+      auto_quiz_reward_total INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(player_id, date_key),
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS event_chats (
+      chat_id TEXT PRIMARY KEY,
+      is_enabled INTEGER NOT NULL DEFAULT 1,
+      enabled_by TEXT,
+      last_emoji_at TEXT,
+      last_auto_quiz_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS event_chat_daily_stats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      date_key TEXT NOT NULL,
+      emoji_sent INTEGER NOT NULL DEFAULT 0,
+      auto_quiz_sent INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(chat_id, date_key),
+      FOREIGN KEY(chat_id) REFERENCES event_chats(chat_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS active_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      player_id INTEGER,
+      event_type TEXT NOT NULL,
+      state_json TEXT,
+      answer TEXT,
+      reward INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      claimed_by_player_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE,
+      FOREIGN KEY(claimed_by_player_id) REFERENCES players(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_active_events_lookup
+    ON active_events(chat_id, event_type, status);
+
+    CREATE INDEX IF NOT EXISTS idx_active_events_player
+    ON active_events(player_id, status);
   `);
 
   patchExistingPlayersTable();

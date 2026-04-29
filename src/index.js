@@ -8,14 +8,19 @@ const { personagensCommand } = require('./commands/personagens');
 const { codigoResgateCommand } = require('./commands/codigoResgate');
 const { perfilCommand } = require('./commands/perfil');
 const { helpCommand } = require('./commands/help');
-const { addZeniesCommand, definirKiCommand } = require('./commands/adminEconomia');
+const { addZeniesCommand, retirarZeniesCommand, definirKiCommand } = require('./commands/adminEconomia');
 const { addUniversoCommand } = require('./commands/addUniverso');
 const { addCargoCommand } = require('./commands/addCargo');
 const { cargosCommand } = require('./commands/cargos');
 const { depositarCommand } = require('./commands/depositar');
+const { lojaCommand } = require('./commands/loja');
+const { comprarCommand } = require('./commands/comprar');
+const { inventarioCommand } = require('./commands/inventario');
+const { eventosCommand, responderCommand, letraCommand, chutarCommand, pegarCommand } = require('./commands/eventos');
 const { runEconomyMaintenance } = require('./services/economyService');
 const { purgeInactiveCharacters } = require('./services/inactivityService');
 const { touchPlayerActivity } = require('./services/playerService');
+const { runAutoEvents } = require('./services/eventService');
 
 migrate();
 
@@ -40,6 +45,15 @@ function runMaintenanceIfNeeded(force = false) {
 runMaintenanceIfNeeded(true);
 setInterval(() => runMaintenanceIfNeeded(true), 60 * 60 * 1000);
 
+let lastAutoEventsAt = 0;
+async function runAutoEventsIfNeeded(force = false) {
+  const now = Date.now();
+  if (!force && now - lastAutoEventsAt < 5 * 60 * 1000) return;
+
+  lastAutoEventsAt = now;
+  await runAutoEvents(client);
+}
+
 const client = new Client({
   authStrategy: new LocalAuth({
     clientId: 'dragonverse-rpg',
@@ -56,9 +70,16 @@ client.on('qr', (qr) => {
   qrcode.generate(qr, { small: true });
 });
 
-client.on('ready', () => {
+client.on('ready', async () => {
   console.log('Bot DragonVerse conectado com sucesso!');
+  await runAutoEventsIfNeeded(true);
 });
+
+setInterval(() => {
+  runAutoEventsIfNeeded(false).catch((error) => {
+    console.error('Erro ao processar eventos automáticos:', error);
+  });
+}, 5 * 60 * 1000);
 
 client.on('message', async (message) => {
   try {
@@ -88,8 +109,25 @@ client.on('message', async (message) => {
         await perfilCommand(message, command);
         break;
 
+      case 'loja':
+        await lojaCommand(message, command);
+        break;
+
+      case 'comprar':
+        await comprarCommand(message, command);
+        break;
+
+      case 'inventario':
+      case 'inventário':
+        await inventarioCommand(message, command);
+        break;
+
       case 'addzenies':
         await addZeniesCommand(message, command);
+        break;
+
+      case 'retirarzenies':
+        await retirarZeniesCommand(message, command);
         break;
 
       case 'definirki':
@@ -110,6 +148,29 @@ client.on('message', async (message) => {
 
       case 'depositar':
         await depositarCommand(message, command);
+        break;
+
+      case 'eventos':
+      case 'evento':
+        await eventosCommand(message, command);
+        break;
+
+      case 'responder':
+      case 'resposta':
+        await responderCommand(message, command);
+        break;
+
+      case 'letra':
+        await letraCommand(message, command);
+        break;
+
+      case 'chutar':
+      case 'chute':
+        await chutarCommand(message, command);
+        break;
+
+      case 'pegar':
+        await pegarCommand(message, command);
         break;
 
       case 'help':
