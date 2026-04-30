@@ -13,7 +13,7 @@ const { addUniversoCommand } = require('./commands/addUniverso');
 const { addCargoCommand } = require('./commands/addCargo');
 const { cargosCommand } = require('./commands/cargos');
 const { depositarCommand } = require('./commands/depositar');
-const { transferirCommand } = require('./commands/transferir');
+const { pixCommand } = require('./commands/pix');
 const { lojaCommand } = require('./commands/loja');
 const { comprarCommand } = require('./commands/comprar');
 const { inventarioCommand } = require('./commands/inventario');
@@ -21,6 +21,7 @@ const { eventosCommand, responderCommand, letraCommand, chutarCommand, pegarComm
 const { addPersonagemCommand, rmvPersonagemCommand } = require('./commands/personagemAdmin');
 const { trocarPersonagemCommand } = require('./commands/trocarPersonagem');
 const { meuIdCommand } = require('./commands/meuId');
+const { blackjackCommand, pokerCommand, trucoCommand } = require('./commands/cardGames');
 const { runEconomyMaintenance } = require('./services/economyService');
 const { purgeInactiveCharacters } = require('./services/inactivityService');
 const { touchPlayerActivity } = require('./services/playerService');
@@ -176,8 +177,12 @@ client.on('message', async (message) => {
         await depositarCommand(message, command);
         break;
 
+      case 'pix':
+        await pixCommand(message, command);
+        break;
+
       case 'transferir':
-        await transferirCommand(message, command);
+        await message.reply('Esse comando mudou para */pix @pessoa valor*.');
         break;
 
       case 'eventos':
@@ -211,10 +216,27 @@ client.on('message', async (message) => {
         await tigrinhoCommand(message, command);
         break;
 
-      case 'help':
+      case 'menu':
       case 'ajuda':
       case 'comandos':
         await helpCommand(message, command);
+        break;
+
+      case 'help':
+        await message.reply('Esse comando mudou para */menu*.');
+        break;
+
+      case 'blackjack':
+      case 'bj':
+        await blackjackCommand(message, command, client);
+        break;
+
+      case 'poker':
+        await pokerCommand(message, command, client);
+        break;
+
+      case 'truco':
+        await trucoCommand(message, command, client);
         break;
 
       default:

@@ -138,12 +138,13 @@ async function definirKi(message, argsText) {
   };
 }
 
-function transferZenies(message, argsText) {
+function transferZenies(message, argsText, options = {}) {
+  void options;
   const sender = getOrCreatePlayerFromMessage(message, { touch: true });
   const targetWhatsappId = getFirstMentionedId(message, argsText);
 
   if (!targetWhatsappId) {
-    return { ok: false, message: 'Use assim: */transferir @pessoa valor*' };
+    return { ok: false, message: 'Use assim: */pix @pessoa valor*' };
   }
 
   const target = getOrCreatePlayerByWhatsAppId(targetWhatsappId, null, { touch: false });
@@ -154,7 +155,7 @@ function transferZenies(message, argsText) {
   const rest = removeFirstMention(argsText);
   const amount = parseAmount(rest.split(/\s+/)[0]);
   if (!amount || amount <= 0) {
-    return { ok: false, message: 'Informe um valor válido. Exemplo: */transferir @pessoa 50000000*' };
+    return { ok: false, message: 'Informe um valor válido. Exemplo: */pix @pessoa 50000000*' };
   }
 
   if (Number(sender.zenies || 0) < amount) {
@@ -193,7 +194,7 @@ function transferZenies(message, argsText) {
   return {
     ok: true,
     message: [
-      '✅ *Transferência realizada!*',
+      '✅ *PIX DragonVerse realizado!*',
       '',
       `📤 De: @${updatedSender.phone}`,
       `📥 Para: @${updatedTarget.phone}`,

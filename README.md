@@ -93,7 +93,7 @@ TIMEZONE=America/Campo_Grande
 /letra A
 /chutar Kamehameha
 /pegar
-/help
+/menu
 ```
 
 ## Comandos administrativos
@@ -454,13 +454,13 @@ Regras:
 ### Transferência de Zenies
 
 ```txt
-/transferir @pessoa valor
+/pix @pessoa valor
 ```
 
 Exemplo:
 
 ```txt
-/transferir @Goku 50000000
+/pix @Goku 50000000
 ```
 
 O bot desconta o valor do jogador que enviou, adiciona ao jogador marcado e registra a movimentação na tabela `transfer_history`.
@@ -504,3 +504,64 @@ Ao iniciar o bot, a migration sincroniza `character_claims.claim_type`:
 - não é necessário apagar o arquivo `data/dragonverse.sqlite`.
 
 Também foi atualizado o `/addcargo`: quando alguém recebe um cargo supremo, a vaga comum do universo é liberada imediatamente.
+
+## Atualização v10 — Menu, Pix e jogos de cartas
+
+### Comandos renomeados
+
+```txt
+/help -> /menu
+/transferir -> /pix
+```
+
+Se alguém usar os comandos antigos, o bot avisa o novo nome correto.
+
+### Pix DragonVerse
+
+```txt
+/pix @pessoa valor
+```
+
+Transfere Zenies entre jogadores e continua registrando a movimentação em `transfer_history`.
+
+### Blackjack
+
+```txt
+/blackjack iniciar 1000000
+/blackjack carta
+/blackjack parar
+/blackjack dobrar
+```
+
+O Blackjack é jogado contra a mesa no grupo. A aposta é retirada no início da partida. Vitória paga 2x, empate devolve a aposta e Blackjack natural paga 2.5x.
+
+### Poker
+
+```txt
+/poker criar 1000000
+/poker entrar
+/poker iniciar
+/poker apostar 5000000
+/poker allin
+/poker mesa
+/poker desistir
+/poker cartas
+```
+
+O Poker usa Texas Hold'em simplificado. O bot envia as cartas de cada jogador no privado, abre as cartas comunitárias no grupo com `/poker mesa` e calcula o vencedor no showdown.
+
+### Truco Paulista limpo
+
+```txt
+/truco criar
+/truco entrar
+/truco iniciar
+/truco jogar 1
+/truco truco
+/truco seis
+/truco nove
+/truco doze
+/truco cartas
+```
+
+O Truco usa baralho limpo, sem 8, 9, 10 e coringas. O bot envia as cartas no privado, mostra a vira e a manilha no grupo e controla as cartas jogadas.

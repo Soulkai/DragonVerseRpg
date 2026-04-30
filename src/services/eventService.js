@@ -29,7 +29,7 @@ const MANUAL_TYPES = ['manual_quiz', 'hangman', 'quick_challenge'];
 const TIGRINHO_DAILY_LIMIT = 3;
 const TIGRINHO_MIN_BET = 1_000_000;
 const TIGRINHO_SYMBOLS = [
-  { emoji: '🐉', name: 'Dragão', weight: 18, payouts: { 3: 5, 6: 25, 9: 100 } },
+  { emoji: '🐉', name: 'Dragão', weight: 18, payouts: { 3: 2, 6: 5, 9: 10 } },
   { emoji: '🐯', name: 'Tigre', weight: 16, payouts: { 3: 3, 6: 7, 9: 15 } },
   { emoji: '🦍', name: 'Gorila', weight: 14, payouts: { 3: 4, 6: 8, 9: 20 } },
   { emoji: '💎', name: 'Diamante', weight: 10, payouts: { 3: 5, 6: 10, 9: 25 } },
@@ -355,6 +355,11 @@ function eventList(message) {
       '⭐/🔥/🍀/🪙 também dão prêmios menores.',
       '3 💩 ou mais = perde o dobro da aposta.',
       `Limite: *${TIGRINHO_DAILY_LIMIT} apostas por dia*.`,
+      '',
+      '🃏 *Jogos de cartas*',
+      '*/blackjack iniciar valor* — Joga Blackjack contra a mesa no grupo.',
+      '*/poker criar valor* — Cria mesa de Poker; cartas vão no privado.',
+      '*/truco criar* — Cria Truco Paulista limpo; cartas vão no privado.',
       '',
       '🐲 *Eventos automáticos do grupo*',
       `Emoji do dragão: a cada hora, até *${DRAGON_EMOJI_DAILY_LIMIT_PER_CHAT} por dia*. Primeiro */pegar* ganha *${money(DRAGON_EMOJI_REWARD)} Zenies*.`,

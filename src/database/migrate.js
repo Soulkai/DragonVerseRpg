@@ -1,7 +1,7 @@
 const db = require('./db');
 const personagensUniverso2 = require('../data/personagensUniverso2');
 const { slugify } = require('../utils/text');
-const { STARTING_ZENIES, calculateTotalSalary } = require('../data/roles');
+const { STARTING_ZENIES, calculateTotalSalary, isSupremeRoleId } = require('../data/roles');
 
 function columnExists(tableName, columnName) {
   const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
@@ -72,7 +72,7 @@ function migrate() {
     ON character_claims(universe_id, character_id)
     WHERE claim_type = 'player';
 
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_supreme_character
+    CREATE INDEX IF NOT EXISTS idx_supreme_character_lookup
     ON character_claims(character_id)
     WHERE claim_type = 'supremo';
 
@@ -197,7 +197,50 @@ function migrate() {
 
   patchExistingPlayersTable();
   patchExistingEventDailyStatsTable();
+  patchCharacterClaimIndexes();
+  syncSupremeCharacterClaims();
   seedUniverse2();
+}
+
+function patchCharacterClaimIndexes() {
+  // Versões antigas tinham um índice único para personagens da Alta Cúpula.
+  // Isso podia impedir a correção automática do banco quando um cargo supremo
+  // já possuía personagem comum. A repetição entre supremos continua sendo
+  // barrada pela lógica do bot em getSupremeClaimByCharacterSlug().
+  db.exec(`
+    DROP INDEX IF EXISTS idx_unique_supreme_character;
+
+    CREATE INDEX IF NOT EXISTS idx_supreme_character_lookup
+    ON character_claims(character_id)
+    WHERE claim_type = 'supremo';
+  `);
+}
+
+function syncSupremeCharacterClaims() {
+  const claims = db.prepare(`
+    SELECT cc.id, cc.claim_type, p.cargo_id
+    FROM character_claims cc
+    JOIN players p ON p.id = cc.player_id
+  `).all();
+
+  const updateClaim = db.prepare(`
+    UPDATE character_claims
+    SET claim_type = ?
+    WHERE id = ?
+  `);
+
+  const transaction = db.transaction(() => {
+    for (const claim of claims) {
+      const shouldBeSupreme = isSupremeRoleId(claim.cargo_id);
+      const nextClaimType = shouldBeSupreme ? 'supremo' : 'player';
+
+      if (claim.claim_type !== nextClaimType) {
+        updateClaim.run(nextClaimType, claim.id);
+      }
+    }
+  });
+
+  transaction();
 }
 
 function patchExistingEventDailyStatsTable() {

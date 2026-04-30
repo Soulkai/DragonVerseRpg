@@ -31,7 +31,7 @@ module.exports = [
   { name: 'Fu', locked: true },
 
   { name: 'Gas', locked: true },
-  { name: 'Gohan', locked: true },
+  { name: 'Gohan' },
   { name: 'Gohan Black' },
   { name: 'Goku', locked: true },
   { name: 'Goku Black' },

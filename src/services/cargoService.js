@@ -10,6 +10,7 @@ const {
   isHighCouncilRoleId,
   canAssignSupremeRoleId,
   calculateTotalSalary,
+  isSupremeRoleId,
 } = require('../data/roles');
 const {
   getOrCreatePlayerFromMessage,
@@ -79,7 +80,39 @@ function setPlayerRole(targetPlayer, role) {
     targetPlayer.id,
   );
 
+  syncPlayerClaimTypeForRole(targetPlayer.id, primary.id);
+
   return db.prepare('SELECT * FROM players WHERE id = ?').get(targetPlayer.id);
+}
+
+function syncPlayerClaimTypeForRole(playerId, primaryRoleId) {
+  const nextClaimType = isSupremeRoleId(primaryRoleId) ? 'supremo' : 'player';
+
+  if (nextClaimType === 'supremo') {
+    db.prepare(`
+      UPDATE character_claims
+      SET claim_type = 'supremo'
+      WHERE player_id = ?
+    `).run(playerId);
+    return;
+  }
+
+  // Se alguém perder cargo supremo no futuro, só volta a ocupar vaga comum
+  // se a vaga ainda estiver livre. Isso evita quebrar o banco caso outro player
+  // já tenha registrado o mesmo personagem comum enquanto ele estava na Alta Cúpula.
+  db.prepare(`
+    UPDATE character_claims
+    SET claim_type = 'player'
+    WHERE player_id = ?
+      AND NOT EXISTS (
+        SELECT 1
+        FROM character_claims other
+        WHERE other.universe_id = character_claims.universe_id
+          AND other.character_id = character_claims.character_id
+          AND other.claim_type = 'player'
+          AND other.player_id <> character_claims.player_id
+      )
+  `).run(playerId);
 }
 
 async function addCargo(message, argsText) {
