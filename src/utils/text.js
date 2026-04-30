@@ -1,51 +1,55 @@
-function normalizeText(text = '') {
-  return String(text)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
+function normalizeCommandName(name) {
+  return String(name || '')
     .trim()
-    .replace(/\s+/g, ' ');
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
-function slugify(text = '') {
-  return normalizeText(text)
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+function parseCommand(body, prefixes = '/') {
+  const text = String(body || '').trim();
+  if (!text) return null;
 
-function getSenderNumber(message) {
-  const raw = message.author || message.from || '';
-  return raw.split('@')[0].replace(/\D/g, '');
-}
+  const prefixList = Array.isArray(prefixes)
+    ? prefixes
+    : String(prefixes || '/')
+        .split(',')
+        .map((prefix) => prefix.trim())
+        .filter(Boolean);
 
-function parseCommand(body = '', prefix = '/') {
-  const text = body.trim();
-  if (!text.startsWith(prefix)) return null;
+  // Ordena por tamanho para evitar conflito caso exista prefixo parecido, tipo "/" e "//"
+  const sortedPrefixes = [...prefixList].sort((a, b) => b.length - a.length);
 
-  const withoutPrefix = text.slice(prefix.length).trim();
-  const firstSpace = withoutPrefix.search(/\s/);
+  const usedPrefix = sortedPrefixes.find((prefix) => text.startsWith(prefix));
+  if (!usedPrefix) return null;
 
-  if (firstSpace === -1) {
-    return {
-      name: normalizeText(withoutPrefix),
-      argsText: '',
-      args: [],
-    };
-  }
+  const withoutPrefix = text.slice(usedPrefix.length).trim();
+  if (!withoutPrefix) return null;
 
-  const name = withoutPrefix.slice(0, firstSpace);
-  const argsText = withoutPrefix.slice(firstSpace + 1).trim();
+  const parts = withoutPrefix.split(/\s+/);
+  const name = normalizeCommandName(parts.shift());
+  const args = parts;
+  const argsText = args.join(' ');
 
   return {
-    name: normalizeText(name),
+    name,
+    args,
     argsText,
-    args: argsText ? argsText.split(/\s+/) : [],
+    raw: withoutPrefix,
+    usedPrefix,
   };
 }
 
+function normalizeText(text) {
+  return String(text || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 module.exports = {
-  normalizeText,
-  slugify,
-  getSenderNumber,
   parseCommand,
+  normalizeCommandName,
+  normalizeText,
 };
