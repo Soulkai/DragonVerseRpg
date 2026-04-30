@@ -29,7 +29,7 @@ const MANUAL_TYPES = ['manual_quiz', 'hangman', 'quick_challenge'];
 const TIGRINHO_DAILY_LIMIT = 3;
 const TIGRINHO_MIN_BET = 1_000_000;
 const TIGRINHO_SYMBOLS = [
-  { emoji: '🐉', name: 'Dragão', weight: 18, payouts: { 3: 2, 6: 5, 9: 10 } },
+  { emoji: '🐉', name: 'Dragão', weight: 18, payouts: { 3: 5, 6: 25, 9: 100 } },
   { emoji: '🐯', name: 'Tigre', weight: 16, payouts: { 3: 3, 6: 7, 9: 15 } },
   { emoji: '🦍', name: 'Gorila', weight: 14, payouts: { 3: 4, 6: 8, 9: 20 } },
   { emoji: '💎', name: 'Diamante', weight: 10, payouts: { 3: 5, 6: 10, 9: 25 } },
