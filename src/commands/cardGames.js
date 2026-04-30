@@ -1,51 +1,53 @@
 const { blackjack, poker, truco } = require('../services/cardGameService');
 
-async function replyWithMentions(message, client, result) {
-  if (!result?.message) return;
+function normalizeMentionId(id = '') {
+  const raw = String(id || '').trim();
+  if (!raw) return null;
 
-  const mentionIds = Array.isArray(result.mentions)
-    ? [...new Set(result.mentions.filter(Boolean))]
-    : [];
+  // Já está no formato correto: 5567...@c.us ou ...@lid
+  if (raw.includes('@')) return raw;
 
-  if (!mentionIds.length || !client?.getContactById) {
-    await message.reply(result.message);
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return null;
+
+  return `${digits}@c.us`;
+}
+
+function normalizeMentionIds(ids = []) {
+  return [...new Set(
+    ids
+      .map(normalizeMentionId)
+      .filter(Boolean)
+  )];
+}
+
+async function replyWithMentions(message, result, client = null) {
+  if (client && result?.mentions && result.mentions.length > 0) {
+    const mentions = normalizeMentionIds(result.mentions);
+
+    await client.sendMessage(message.from, result.message, {
+      mentions,
+    });
+
     return;
-  }
-
-  try {
-    const contacts = [];
-    for (const id of mentionIds) {
-      try {
-        contacts.push(await client.getContactById(id));
-      } catch (error) {
-        console.error(`[mentions] Não consegui carregar contato ${id}:`, error.message);
-      }
-    }
-
-    if (contacts.length) {
-      await message.reply(result.message, undefined, { mentions: contacts });
-      return;
-    }
-  } catch (error) {
-    console.error('[mentions] Falha ao responder com marcações:', error.message);
   }
 
   await message.reply(result.message);
 }
 
 async function blackjackCommand(message, command, client) {
-  const result = await blackjack(message, command.argsText);
-  await replyWithMentions(message, client, result);
+  const result = await blackjack(message, command.argsText, client);
+  await replyWithMentions(message, result, client);
 }
 
 async function pokerCommand(message, command, client) {
   const result = await poker(message, command.argsText, client);
-  await replyWithMentions(message, client, result);
+  await replyWithMentions(message, result, client);
 }
 
 async function trucoCommand(message, command, client) {
   const result = await truco(message, command.argsText, client);
-  await replyWithMentions(message, client, result);
+  await replyWithMentions(message, result, client);
 }
 
 module.exports = {
