@@ -17,7 +17,6 @@ function parseCommand(body, prefixes = '/') {
         .map((prefix) => prefix.trim())
         .filter(Boolean);
 
-  // Ordena por tamanho para evitar conflito caso exista prefixo parecido, tipo "/" e "//"
   const sortedPrefixes = [...prefixList].sort((a, b) => b.length - a.length);
 
   const usedPrefix = sortedPrefixes.find((prefix) => text.startsWith(prefix));
@@ -40,6 +39,14 @@ function parseCommand(body, prefixes = '/') {
   };
 }
 
+function slugify(text) {
+  return normalizeText(text)
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 function normalizeText(text) {
   return String(text || '')
     .trim()
@@ -52,4 +59,5 @@ module.exports = {
   parseCommand,
   normalizeCommandName,
   normalizeText,
+  slugify,
 };
