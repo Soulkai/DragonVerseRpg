@@ -491,3 +491,16 @@ Prêmios principais:
 | 🔥 Fogo | 2x | 4x | 8x |
 | 🍀 Trevo | 2x | 5x | 12x |
 | 🪙 Moeda | 2x | 3x | 6x |
+
+## Atualização v9 — Alta Cúpula não ocupa personagem comum
+
+Esta versão corrige automaticamente personagens de jogadores com cargo supremo.
+
+Ao iniciar o bot, a migration sincroniza `character_claims.claim_type`:
+
+- jogadores com cargo supremo (`A.S`, `S.M`, `HAKAI`, `ANJO`, `G.K`) passam para `claim_type = 'supremo'`;
+- personagens supremos continuam aparecendo no `/Perfil`;
+- esses personagens deixam de aparecer como ocupados em `/Personagens universo`;
+- não é necessário apagar o arquivo `data/dragonverse.sqlite`.
+
+Também foi atualizado o `/addcargo`: quando alguém recebe um cargo supremo, a vaga comum do universo é liberada imediatamente.
