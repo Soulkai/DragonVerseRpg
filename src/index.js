@@ -13,10 +13,14 @@ const { addUniversoCommand } = require('./commands/addUniverso');
 const { addCargoCommand } = require('./commands/addCargo');
 const { cargosCommand } = require('./commands/cargos');
 const { depositarCommand } = require('./commands/depositar');
+const { transferirCommand } = require('./commands/transferir');
 const { lojaCommand } = require('./commands/loja');
 const { comprarCommand } = require('./commands/comprar');
 const { inventarioCommand } = require('./commands/inventario');
-const { eventosCommand, responderCommand, letraCommand, chutarCommand, pegarCommand } = require('./commands/eventos');
+const { eventosCommand, responderCommand, letraCommand, chutarCommand, pegarCommand, tigrinhoCommand } = require('./commands/eventos');
+const { addPersonagemCommand, rmvPersonagemCommand } = require('./commands/personagemAdmin');
+const { trocarPersonagemCommand } = require('./commands/trocarPersonagem');
+const { meuIdCommand } = require('./commands/meuId');
 const { runEconomyMaintenance } = require('./services/economyService');
 const { purgeInactiveCharacters } = require('./services/inactivityService');
 const { touchPlayerActivity } = require('./services/playerService');
@@ -109,6 +113,12 @@ client.on('message', async (message) => {
         await perfilCommand(message, command);
         break;
 
+      case 'meuid':
+      case 'meu id':
+      case 'id':
+        await meuIdCommand(message, command);
+        break;
+
       case 'loja':
         await lojaCommand(message, command);
         break;
@@ -138,6 +148,22 @@ client.on('message', async (message) => {
         await addUniversoCommand(message, command);
         break;
 
+      case 'addpersonagem':
+      case 'add personagem':
+        await addPersonagemCommand(message, command);
+        break;
+
+      case 'rmvpersonagem':
+      case 'removerpersonagem':
+      case 'remover personagem':
+        await rmvPersonagemCommand(message, command);
+        break;
+
+      case 'trocarpersonagem':
+      case 'trocar personagem':
+        await trocarPersonagemCommand(message, command);
+        break;
+
       case 'addcargo':
         await addCargoCommand(message, command);
         break;
@@ -148,6 +174,10 @@ client.on('message', async (message) => {
 
       case 'depositar':
         await depositarCommand(message, command);
+        break;
+
+      case 'transferir':
+        await transferirCommand(message, command);
         break;
 
       case 'eventos':
@@ -171,6 +201,14 @@ client.on('message', async (message) => {
 
       case 'pegar':
         await pegarCommand(message, command);
+        break;
+
+      case 'tigrinho':
+      case 'cassino':
+      case 'cacaniquel':
+      case 'caçaníquel':
+      case 'caca niquel':
+        await tigrinhoCommand(message, command);
         break;
 
       case 'help':

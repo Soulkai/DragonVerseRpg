@@ -1,7 +1,7 @@
 const { addUniverso } = require('../services/universeService');
 
 async function addUniversoCommand(message, command) {
-  const result = addUniverso(message, command.argsText);
+  const result = await addUniverso(message, command.argsText);
   await message.reply(result.message);
 }
 

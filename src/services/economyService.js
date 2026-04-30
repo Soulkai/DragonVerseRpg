@@ -15,8 +15,8 @@ const {
   getPlayerByWhatsAppId,
 } = require('./playerService');
 
-function requireAdmin(message) {
-  if (isAdmin(message)) return { ok: true };
+async function requireAdmin(message) {
+  if (await isAdmin(message)) return { ok: true };
 
   const player = getOrCreatePlayerFromMessage(message, { touch: true });
   if (['A.S', 'S.M'].includes(player.cargo_id)) return { ok: true };
@@ -24,8 +24,8 @@ function requireAdmin(message) {
   return { ok: false, message: 'Apenas administradores, Autoridade Suprema ou Supremo Ministro podem usar esse comando.' };
 }
 
-function addZenies(message, argsText) {
-  const permission = requireAdmin(message);
+async function addZenies(message, argsText) {
+  const permission = await requireAdmin(message);
   if (!permission.ok) return permission;
 
   const targetWhatsappId = getFirstMentionedId(message, argsText);
@@ -61,8 +61,8 @@ function addZenies(message, argsText) {
   };
 }
 
-function retirarZenies(message, argsText) {
-  const permission = requireAdmin(message);
+async function retirarZenies(message, argsText) {
+  const permission = await requireAdmin(message);
   if (!permission.ok) return permission;
 
   const targetWhatsappId = getFirstMentionedId(message, argsText);
@@ -101,8 +101,8 @@ function retirarZenies(message, argsText) {
   };
 }
 
-function definirKi(message, argsText) {
-  const permission = requireAdmin(message);
+async function definirKi(message, argsText) {
+  const permission = await requireAdmin(message);
   if (!permission.ok) return permission;
 
   const targetWhatsappId = getFirstMentionedId(message, argsText);
@@ -134,6 +134,72 @@ function definirKi(message, argsText) {
       `👤 Jogador: @${updated.phone}`,
       `🔥 Ki atual: *Ki ${formatKiLevel(updated.ki_atual)}*`,
       `💪 Atributos totais: *${money(updated.ki_atual * 4_000_000)}*`,
+    ].join('\n'),
+  };
+}
+
+function transferZenies(message, argsText) {
+  const sender = getOrCreatePlayerFromMessage(message, { touch: true });
+  const targetWhatsappId = getFirstMentionedId(message, argsText);
+
+  if (!targetWhatsappId) {
+    return { ok: false, message: 'Use assim: */transferir @pessoa valor*' };
+  }
+
+  const target = getOrCreatePlayerByWhatsAppId(targetWhatsappId, null, { touch: false });
+  if (target.id === sender.id) {
+    return { ok: false, message: 'Você não pode transferir Zenies para si mesmo.' };
+  }
+
+  const rest = removeFirstMention(argsText);
+  const amount = parseAmount(rest.split(/\s+/)[0]);
+  if (!amount || amount <= 0) {
+    return { ok: false, message: 'Informe um valor válido. Exemplo: */transferir @pessoa 50000000*' };
+  }
+
+  if (Number(sender.zenies || 0) < amount) {
+    return {
+      ok: false,
+      message: `Saldo insuficiente. Você tem *${money(sender.zenies)} Zenies* disponíveis.`,
+    };
+  }
+
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      UPDATE players
+      SET zenies = zenies - ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(amount, sender.id);
+
+    db.prepare(`
+      UPDATE players
+      SET zenies = zenies + ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(amount, target.id);
+
+    db.prepare(`
+      INSERT INTO transfer_history (from_player_id, to_player_id, amount)
+      VALUES (?, ?, ?)
+    `).run(sender.id, target.id, amount);
+  });
+
+  transaction();
+
+  const updatedSender = getPlayerByWhatsAppId(sender.whatsapp_id);
+  const updatedTarget = getPlayerByWhatsAppId(target.whatsapp_id);
+
+  return {
+    ok: true,
+    message: [
+      '✅ *Transferência realizada!*',
+      '',
+      `📤 De: @${updatedSender.phone}`,
+      `📥 Para: @${updatedTarget.phone}`,
+      `💸 Valor: *${money(amount)} Zenies*`,
+      '',
+      `💰 Seu saldo atual: *${money(updatedSender.zenies)} Zenies*`,
     ].join('\n'),
   };
 }
@@ -266,6 +332,7 @@ module.exports = {
   addZenies,
   retirarZenies,
   definirKi,
+  transferZenies,
   depositar,
   applyDueSalaries,
   applyDueDepositInterest,

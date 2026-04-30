@@ -4,14 +4,14 @@ const { parseInteger } = require('../utils/numbers');
 const { createUniverseWithCharacters } = require('../database/migrate');
 const { getOrCreatePlayerFromMessage } = require('./playerService');
 
-function canCreateUniverse(message) {
-  if (isAdmin(message)) return true;
+async function canCreateUniverse(message) {
+  if (await isAdmin(message)) return true;
   const player = getOrCreatePlayerFromMessage(message, { touch: true });
   return ['A.S', 'S.M'].includes(player.cargo_id);
 }
 
-function addUniverso(message, argsText) {
-  if (!canCreateUniverse(message)) {
+async function addUniverso(message, argsText) {
+  if (!(await canCreateUniverse(message))) {
     return { ok: false, message: 'Apenas administradores, Autoridade Suprema ou Supremo Ministro podem criar universos.' };
   }
 

@@ -3,6 +3,7 @@ const settings = require('../config/settings');
 const { isAdmin } = require('../utils/admin');
 const { normalizeText } = require('../utils/text');
 const { money } = require('../utils/format');
+const { parseAmount } = require('../utils/numbers');
 const {
   getOrCreatePlayerFromMessage,
   getOrCreatePlayerByWhatsAppId,
@@ -25,6 +26,19 @@ const {
 } = require('../data/events');
 
 const MANUAL_TYPES = ['manual_quiz', 'hangman', 'quick_challenge'];
+const TIGRINHO_DAILY_LIMIT = 3;
+const TIGRINHO_MIN_BET = 1_000_000;
+const TIGRINHO_SYMBOLS = [
+  { emoji: '🐉', name: 'Dragão', weight: 18, payouts: { 3: 2, 6: 5, 9: 10 } },
+  { emoji: '🐯', name: 'Tigre', weight: 16, payouts: { 3: 3, 6: 7, 9: 15 } },
+  { emoji: '🦍', name: 'Gorila', weight: 14, payouts: { 3: 4, 6: 8, 9: 20 } },
+  { emoji: '💎', name: 'Diamante', weight: 10, payouts: { 3: 5, 6: 10, 9: 25 } },
+  { emoji: '⭐', name: 'Estrela', weight: 14, payouts: { 3: 2, 6: 4, 9: 8 } },
+  { emoji: '🔥', name: 'Fogo', weight: 12, payouts: { 3: 2, 6: 4, 9: 8 } },
+  { emoji: '🍀', name: 'Trevo', weight: 10, payouts: { 3: 2, 6: 5, 9: 12 } },
+  { emoji: '🪙', name: 'Moeda', weight: 10, payouts: { 3: 2, 6: 3, 9: 6 } },
+  { emoji: '💩', name: 'Coco', weight: 8, payouts: null },
+];
 
 function nowIso() {
   return new Date().toISOString();
@@ -331,6 +345,17 @@ function eventList(message) {
       '*/letra A* — Tenta uma letra na forca.',
       '*/chutar Kamehameha* — Tenta finalizar a forca.',
       '',
+      '🎰 *Caça-níquel / Tigrinho*',
+      '*/tigrinho valor* — aposta mínima de *1.000.000 Zenies*.',
+      'Combinações principais:',
+      '🐉 Dragão: 3=2x | 6=5x | 9=10x.',
+      '🐯 Tigre: 3=3x | 6=7x | 9=15x.',
+      '🦍 Gorila: 3=4x | 6=8x | 9=20x.',
+      '💎 Diamante: 3=5x | 6=10x | 9=25x.',
+      '⭐/🔥/🍀/🪙 também dão prêmios menores.',
+      '3 💩 ou mais = perde o dobro da aposta.',
+      `Limite: *${TIGRINHO_DAILY_LIMIT} apostas por dia*.`,
+      '',
       '🐲 *Eventos automáticos do grupo*',
       `Emoji do dragão: a cada hora, até *${DRAGON_EMOJI_DAILY_LIMIT_PER_CHAT} por dia*. Primeiro */pegar* ganha *${money(DRAGON_EMOJI_REWARD)} Zenies*.`,
       `Pergunta relâmpago: *${AUTO_QUIZ_DAILY_LIMIT_PER_CHAT} vezes por dia*. Primeiro acerto ganha *${money(AUTO_QUIZ_REWARD)} Zenies*.`,
@@ -343,18 +368,21 @@ function eventList(message) {
       `Participações: *${stats.manual_participations}/${MANUAL_DAILY_LIMIT}*`,
       `Vitórias manuais: *${stats.manual_wins}*`,
       `Zenies ganhos em eventos manuais: *${money(stats.manual_reward_total)}*`,
+      `Apostas no tigrinho: *${stats.slot_plays || 0}/${TIGRINHO_DAILY_LIMIT}*`,
+      `Total apostado: *${money(stats.slot_bet_total || 0)} Zenies*`,
+      `Total recebido no tigrinho: *${money(stats.slot_reward_total || 0)} Zenies*`,
     ].join('\n'),
   };
 }
 
-function hasEventChatPermission(message) {
-  if (isAdmin(message)) return true;
+async function hasEventChatPermission(message) {
+  if (await isAdmin(message)) return true;
   const player = getOrCreatePlayerFromMessage(message, { touch: true });
   return ['A.S', 'S.M'].includes(String(player.cargo_id || '').toUpperCase());
 }
 
-function enableEventChat(message) {
-  if (!hasEventChatPermission(message)) {
+async function enableEventChat(message) {
+  if (!(await hasEventChatPermission(message))) {
     return { ok: false, message: 'Apenas admins, Autoridade Suprema ou Supremo Ministro podem ativar eventos automáticos.' };
   }
 
@@ -371,8 +399,8 @@ function enableEventChat(message) {
   return { ok: true, message: '✅ Eventos automáticos ativados neste chat.' };
 }
 
-function disableEventChat(message) {
-  if (!hasEventChatPermission(message)) {
+async function disableEventChat(message) {
+  if (!(await hasEventChatPermission(message))) {
     return { ok: false, message: 'Apenas admins, Autoridade Suprema ou Supremo Ministro podem desativar eventos automáticos.' };
   }
 
@@ -480,12 +508,12 @@ function startHangmanEvent(message) {
   return { ok: true, message: formatHangman(state) };
 }
 
-function eventos(message, argsText = '') {
+async function eventos(message, argsText = '') {
   const action = normalizeText(argsText);
 
   if (!action) return eventList(message);
-  if (['ativar', 'on', 'ligar'].includes(action)) return enableEventChat(message);
-  if (['desativar', 'off', 'desligar'].includes(action)) return disableEventChat(message);
+  if (['ativar', 'on', 'ligar'].includes(action)) return await enableEventChat(message);
+  if (['desativar', 'off', 'desligar'].includes(action)) return await disableEventChat(message);
   if (['pergunta', 'perguntas', 'quiz'].includes(action)) return startQuestionEvent(message);
   if (['forca', 'hangman'].includes(action)) return startHangmanEvent(message);
   if (['desafio', 'treino', 'rapido', 'rápido'].includes(action)) return startQuickChallenge(message);
@@ -798,6 +826,185 @@ async function sendAutoQuizEvent(client, chatId) {
   ].join('\n'));
 }
 
+function weightedRandomSymbol() {
+  const total = TIGRINHO_SYMBOLS.reduce((sum, item) => sum + item.weight, 0);
+  let roll = Math.random() * total;
+  for (const item of TIGRINHO_SYMBOLS) {
+    roll -= item.weight;
+    if (roll <= 0) return item.emoji;
+  }
+  return TIGRINHO_SYMBOLS[TIGRINHO_SYMBOLS.length - 1].emoji;
+}
+
+function rollTigrinhoGrid() {
+  return Array.from({ length: 9 }, () => weightedRandomSymbol());
+}
+
+function formatTigrinhoGrid(symbols) {
+  return [
+    symbols.slice(0, 3).join(' | '),
+    symbols.slice(3, 6).join(' | '),
+    symbols.slice(6, 9).join(' | '),
+  ].join('\n');
+}
+
+function countTigrinhoSymbols(symbols) {
+  return symbols.reduce((counts, symbol) => {
+    counts[symbol] = (counts[symbol] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function getTigrinhoPrize(symbols) {
+  const counts = countTigrinhoSymbols(symbols);
+  const poopCount = counts['💩'] || 0;
+
+  if (poopCount >= 3) {
+    return {
+      isPenalty: true,
+      poopCount,
+      multiplier: 0,
+      symbol: '💩',
+      name: 'Coco',
+      count: poopCount,
+      threshold: 3,
+    };
+  }
+
+  let best = {
+    isPenalty: false,
+    poopCount,
+    multiplier: 0,
+    symbol: null,
+    name: null,
+    count: 0,
+    threshold: 0,
+  };
+
+  for (const item of TIGRINHO_SYMBOLS) {
+    if (!item.payouts) continue;
+
+    const count = counts[item.emoji] || 0;
+    const threshold = count >= 9 ? 9 : count >= 6 ? 6 : count >= 3 ? 3 : 0;
+    if (!threshold) continue;
+
+    const multiplier = item.payouts[threshold] || 0;
+    if (multiplier > best.multiplier) {
+      best = {
+        isPenalty: false,
+        poopCount,
+        multiplier,
+        symbol: item.emoji,
+        name: item.name,
+        count,
+        threshold,
+      };
+    }
+  }
+
+  return best;
+}
+
+function formatTigrinhoCounts(symbols) {
+  const counts = countTigrinhoSymbols(symbols);
+  return TIGRINHO_SYMBOLS
+    .map((item) => `${item.emoji} ${counts[item.emoji] || 0}`)
+    .join('  ');
+}
+
+function tigrinho(message, argsText = '') {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const bet = parseAmount(String(argsText || '').split(/\s+/)[0]);
+
+  if (!bet || bet < TIGRINHO_MIN_BET) {
+    return {
+      ok: false,
+      message: `Use assim: */tigrinho valor*\nAposta mínima: *${money(TIGRINHO_MIN_BET)} Zenies*.`,
+    };
+  }
+
+  const stats = ensurePlayerDailyStats(player.id);
+  if (Number(stats.slot_plays || 0) >= TIGRINHO_DAILY_LIMIT) {
+    return {
+      ok: false,
+      message: `⛔ Você já usou suas *${TIGRINHO_DAILY_LIMIT}/${TIGRINHO_DAILY_LIMIT}* apostas do tigrinho hoje.`,
+    };
+  }
+
+  if (Number(player.zenies || 0) < bet) {
+    return {
+      ok: false,
+      message: `Saldo insuficiente. Você tem *${money(player.zenies)} Zenies*.`,
+    };
+  }
+
+  const symbols = rollTigrinhoGrid();
+  const prize = getTigrinhoPrize(symbols);
+
+  let reward = 0;
+  let extraPenalty = 0;
+  let resultTitle = '💸 *Nada veio...*';
+  let resultText = 'Você perdeu a aposta.';
+
+  if (prize.isPenalty) {
+    extraPenalty = bet;
+    resultTitle = '💩 *Azar supremo!*';
+    resultText = `Vieram ${prize.poopCount} 💩. Você perdeu o dobro da aposta.`;
+  } else if (prize.multiplier > 0) {
+    reward = bet * prize.multiplier;
+    resultTitle = `${prize.symbol} *${prize.threshold} ${prize.name}(s)!*`;
+    resultText = `Você ganhou *${prize.multiplier}x* o valor apostado.`;
+  }
+
+  const availableAfterBet = Math.max(0, Number(player.zenies || 0) - bet);
+  const appliedExtraPenalty = Math.min(availableAfterBet, extraPenalty);
+  const totalLoss = bet + appliedExtraPenalty;
+
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      UPDATE players
+      SET zenies = MAX(zenies - ?, 0) + ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(totalLoss, reward, player.id);
+
+    db.prepare(`
+      UPDATE event_daily_stats
+      SET slot_plays = slot_plays + 1,
+          slot_bet_total = slot_bet_total + ?,
+          slot_reward_total = slot_reward_total + ?,
+          slot_loss_total = slot_loss_total + ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE player_id = ? AND date_key = ?
+    `).run(bet, reward, totalLoss, player.id, dateKey());
+  });
+
+  transaction();
+
+  const updated = db.prepare('SELECT zenies FROM players WHERE id = ?').get(player.id);
+  const newStats = ensurePlayerDailyStats(player.id);
+
+  return {
+    ok: true,
+    message: [
+      '🎰 *Tigrinho DragonVerse*',
+      '',
+      formatTigrinhoGrid(symbols),
+      '',
+      resultTitle,
+      resultText,
+      '',
+      `🎲 Símbolos: ${formatTigrinhoCounts(symbols)}`,
+      prize.multiplier > 0 ? `🎯 Melhor combinação: *${prize.threshold} ${prize.symbol} ${prize.name}*` : null,
+      `🎲 Aposta: *${money(bet)} Zenies*`,
+      reward > 0 ? `🏆 Prêmio: *${money(reward)} Zenies*` : null,
+      appliedExtraPenalty > 0 ? `💀 Punição extra: *${money(appliedExtraPenalty)} Zenies*` : null,
+      `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
+      `📊 Apostas hoje: *${newStats.slot_plays}/${TIGRINHO_DAILY_LIMIT}*`,
+    ].filter(Boolean).join('\n'),
+  };
+}
+
 async function runAutoEvents(client) {
   cleanupExpiredEvents();
   const chats = db.prepare(`
@@ -829,6 +1036,7 @@ module.exports = {
   guessLetter,
   guessWord,
   pegar,
+  tigrinho,
   runAutoEvents,
   cleanupExpiredEvents,
 };

@@ -4,17 +4,19 @@ module.exports = [
   { name: 'Android 18' },
   { name: 'Android 21' },
 
-  { name: 'Baby' },
+  { name: 'Baby', locked: true },
   { name: 'Bardock', locked: true },
-  { name: 'Bibidi' },
+  { name: 'Bibidi', locked: true },
   { name: 'Bills', locked: true },
   { name: 'Bio Broly' },
   { name: 'Botamo' },
   { name: 'Broly (DBS)', locked: true },
+  { name: 'Broly (DBZ)', locked: true },
 
   { name: 'Cabba' },
   { name: 'Caulifla' },
   { name: 'Cell', locked: true },
+  { name: 'Chaos' },
   { name: 'Chichi' },
   { name: 'Cooler' },
   { name: 'Cumber' },
@@ -37,7 +39,7 @@ module.exports = [
   { name: 'Granolah', locked: true },
 
   { name: 'Hearts', locked: true },
-  { name: 'Hit' },
+  { name: 'Hit', locked: true },
 
   { name: 'Janemba' },
   { name: 'Jiren', locked: true },
@@ -48,6 +50,7 @@ module.exports = [
 
   { name: 'Majin Buu' },
   { name: 'Moro', locked: true },
+  { name: 'Mr. Popo', locked: true },
 
   { name: 'Pan' },
   { name: 'Piccolo' },
@@ -62,7 +65,7 @@ module.exports = [
 
   { name: 'Uub' },
 
-  { name: 'Vegeta' },
+  { name: 'Vegeta', locked: true },
   { name: 'Videl' },
 
   { name: 'Zamasu' },

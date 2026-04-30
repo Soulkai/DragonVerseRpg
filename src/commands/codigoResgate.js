@@ -21,7 +21,7 @@ function parseCodigoArgs(argsText) {
 }
 
 async function codigoResgateCommand(message, command) {
-  if (!isAdmin(message)) {
+  if (!(await isAdmin(message))) {
     await message.reply('Apenas administradores podem gerar código de resgate.');
     return;
   }

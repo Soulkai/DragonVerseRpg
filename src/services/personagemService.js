@@ -4,11 +4,15 @@ const path = require('path');
 const db = require('../database/db');
 const { isSupremeRoleId } = require('../data/roles');
 const { normalizeText, slugify } = require('../utils/text');
+const { money } = require('../utils/format');
+const { isAdmin } = require('../utils/admin');
 const {
   getOrCreatePlayerFromMessage,
   getWhatsAppIdFromMessage,
   getPlayerClaim,
 } = require('./playerService');
+
+const CHARACTER_SWAP_TAX_RATE = 0.25;
 
 function validateUniverse(universeId) {
   if (!Number.isInteger(universeId)) {
@@ -58,13 +62,8 @@ function consumeRescueCode({ code, universeId, characterId, whatsappId }) {
     WHERE code = ? AND universe_id = ? AND character_id = ?
   `).get(normalizedCode, universeId, characterId);
 
-  if (!rescue) {
-    return { ok: false, message: 'Código de resgate inválido para esse personagem.' };
-  }
-
-  if (rescue.used_at) {
-    return { ok: false, message: 'Esse código de resgate já foi usado.' };
-  }
+  if (!rescue) return { ok: false, message: 'Código de resgate inválido para esse personagem.' };
+  if (rescue.used_at) return { ok: false, message: 'Esse código de resgate já foi usado.' };
 
   db.prepare(`
     UPDATE rescue_codes
@@ -98,14 +97,10 @@ function registerCharacter(message, universeId, characterName, rescueCode = null
 
   if (!isSupreme) {
     const occupied = getClaimByCharacter(universeId, character.id, 'player');
-    if (occupied) {
-      return { ok: false, message: `*${character.name}* já está ocupado no Universo ${universeId}.` };
-    }
+    if (occupied) return { ok: false, message: `*${character.name}* já está ocupado no Universo ${universeId}.` };
   } else {
     const supremeOccupied = getSupremeClaimByCharacterSlug(character.slug);
-    if (supremeOccupied) {
-      return { ok: false, message: `*${character.name}* já está sendo usado por alguém da Alta Cúpula.` };
-    }
+    if (supremeOccupied) return { ok: false, message: `*${character.name}* já está sendo usado por alguém da Alta Cúpula.` };
   }
 
   if (character.is_locked && !isSupreme) {
@@ -205,9 +200,7 @@ function generateRescueCode(message, universeId, characterName) {
   if (!universeValidation.ok) return universeValidation;
 
   const character = findCharacter(universeId, characterName);
-  if (!character) {
-    return { ok: false, message: `Não encontrei *${characterName}* no Universo ${universeId}.` };
-  }
+  if (!character) return { ok: false, message: `Não encontrei *${characterName}* no Universo ${universeId}.` };
 
   if (!character.is_locked) {
     return { ok: false, message: `*${character.name}* não é bloqueado, então não precisa de código de resgate.` };
@@ -248,14 +241,10 @@ function getProfile(message) {
   const whatsappId = getWhatsAppIdFromMessage(message);
   const player = db.prepare('SELECT * FROM players WHERE whatsapp_id = ?').get(whatsappId);
 
-  if (!player) {
-    return { ok: false, message: 'Você ainda não tem perfil. Use */Registro 2 Nome do Personagem*.' };
-  }
+  if (!player) return { ok: false, message: 'Você ainda não tem perfil. Use */Registro 2 Nome do Personagem*.' };
 
   const claim = getPlayerClaim(player.id);
-  if (!claim) {
-    return { ok: false, message: 'Você ainda não escolheu personagem. Use */Registro 2 Nome do Personagem*.' };
-  }
+  if (!claim) return { ok: false, message: 'Você ainda não escolheu personagem. Use */Registro 2 Nome do Personagem*.' };
 
   const profile = {
     ...player,
@@ -273,10 +262,193 @@ function getProfile(message) {
   return { ok: true, profile, imagePath: absoluteImagePath };
 }
 
+function splitUniverseAndName(argsText = '', player = null) {
+  const parts = String(argsText).trim().split(/\s+/).filter(Boolean);
+  let universeId = null;
+
+  if (parts.length && /^\d+$/.test(parts[0])) {
+    universeId = Number(parts.shift());
+  }
+
+  if (!universeId && player) {
+    const claim = getPlayerClaim(player.id);
+    if (claim) universeId = Number(claim.universe_id);
+  }
+
+  if (!universeId) universeId = 2;
+  return { universeId, rest: parts.join(' ').trim() };
+}
+
+async function canManageCharacters(message, universeId) {
+  if (await isAdmin(message)) return { ok: true };
+
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const role = String(player.cargo_id || '').toUpperCase();
+  if (['A.S', 'S.M'].includes(role)) return { ok: true };
+
+  const claim = getPlayerClaim(player.id);
+  const sameUniverse = claim && Number(claim.universe_id) === Number(universeId);
+  if (sameUniverse && ['HAKAI', 'ANJO', 'G.K'].includes(role)) return { ok: true };
+
+  return {
+    ok: false,
+    message: 'Apenas admins, Autoridade Suprema, Supremo Ministro ou líderes do próprio universo podem alterar a lista de personagens.',
+  };
+}
+
+async function addCharacterToUniverse(message, argsText = '') {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const parsed = splitUniverseAndName(argsText, player);
+  const universeValidation = validateUniverse(parsed.universeId);
+  if (!universeValidation.ok) return universeValidation;
+
+  const permission = await canManageCharacters(message, parsed.universeId);
+  if (!permission.ok) return permission;
+
+  const match = parsed.rest.match(/\s+(block|blocked|bloqueado|lock|locked|free|livre)$/i);
+  if (!match) {
+    return {
+      ok: false,
+      message: 'Use assim: */addpersonagem Nome do Personagem Block* ou */addpersonagem Nome do Personagem Free*\nTambém aceita: */addpersonagem 3 Nome Free*',
+    };
+  }
+
+  const status = normalizeText(match[1]);
+  const characterName = parsed.rest.slice(0, match.index).trim();
+  if (!characterName) return { ok: false, message: 'Informe o nome do personagem.' };
+
+  const isLocked = ['block', 'blocked', 'bloqueado', 'lock', 'locked'].includes(status) ? 1 : 0;
+  const slug = slugify(characterName);
+  if (!slug) return { ok: false, message: 'Nome de personagem inválido.' };
+
+  const existed = findCharacter(parsed.universeId, characterName);
+  db.prepare(`
+    INSERT INTO characters (universe_id, name, slug, is_locked, image_path)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(universe_id, slug) DO UPDATE SET
+      name = excluded.name,
+      is_locked = excluded.is_locked,
+      image_path = COALESCE(characters.image_path, excluded.image_path)
+  `).run(parsed.universeId, characterName, slug, isLocked, `assets/personagens/${slug}.png`);
+
+  return {
+    ok: true,
+    message: [
+      existed ? '✅ *Personagem atualizado!*' : '✅ *Personagem adicionado!*',
+      '',
+      `🌌 Universo: *${parsed.universeId}*`,
+      `👤 Personagem: *${characterName}*`,
+      `Estado: *${isLocked ? 'Bloqueado 🔒' : 'Livre ⚪'}*`,
+    ].join('\n'),
+  };
+}
+
+async function removeCharacterFromUniverse(message, argsText = '') {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const parsed = splitUniverseAndName(argsText, player);
+  const universeValidation = validateUniverse(parsed.universeId);
+  if (!universeValidation.ok) return universeValidation;
+
+  const permission = await canManageCharacters(message, parsed.universeId);
+  if (!permission.ok) return permission;
+
+  const characterName = parsed.rest.trim();
+  if (!characterName) {
+    return { ok: false, message: 'Use assim: */rmvpersonagem Nome do Personagem* ou */rmvpersonagem 3 Nome do Personagem*' };
+  }
+
+  const character = findCharacter(parsed.universeId, characterName);
+  if (!character) return { ok: false, message: `Não encontrei *${characterName}* no Universo ${parsed.universeId}.` };
+
+  const claims = db.prepare('SELECT COUNT(*) AS total FROM character_claims WHERE character_id = ?').get(character.id).total || 0;
+  db.prepare('DELETE FROM characters WHERE id = ?').run(character.id);
+
+  return {
+    ok: true,
+    message: [
+      '✅ *Personagem removido da lista!*',
+      '',
+      `🌌 Universo: *${parsed.universeId}*`,
+      `👤 Personagem: *${character.name}*`,
+      claims > 0 ? `⚠️ Registros removidos junto com o personagem: *${claims}*` : null,
+    ].filter(Boolean).join('\n'),
+  };
+}
+
+function trocarPersonagem(message, argsText = '') {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const claim = getPlayerClaim(player.id);
+  if (!claim) {
+    return { ok: false, message: 'Você ainda não tem personagem. Use */Registro 2 Nome do Personagem* primeiro.' };
+  }
+
+  const characterName = String(argsText || '').trim();
+  if (!characterName) return { ok: false, message: 'Use assim: */trocarpersonagem Nome do Personagem*' };
+
+  const universeId = Number(claim.universe_id);
+  const character = findCharacter(universeId, characterName);
+  if (!character) {
+    return { ok: false, message: `Não encontrei *${characterName}* no Universo ${universeId}. Use */Personagens ${universeId}*.` };
+  }
+
+  if (character.id === claim.character_id) return { ok: false, message: `Você já está usando *${character.name}*.` };
+
+  const isSupreme = isSupremeRoleId(player.cargo_id);
+  if (!isSupreme && character.is_locked) {
+    return { ok: false, message: `*${character.name}* é bloqueado 🔒 e não pode ser escolhido pelo comando de troca.` };
+  }
+
+  if (!isSupreme) {
+    const occupied = getClaimByCharacter(universeId, character.id, 'player');
+    if (occupied) return { ok: false, message: `*${character.name}* já está ocupado no Universo ${universeId}.` };
+  } else {
+    const supremeOccupied = getSupremeClaimByCharacterSlug(character.slug);
+    if (supremeOccupied && supremeOccupied.player_id !== player.id) {
+      return { ok: false, message: `*${character.name}* já está sendo usado por alguém da Alta Cúpula.` };
+    }
+  }
+
+  const cost = Math.floor(Number(player.zenies || 0) * CHARACTER_SWAP_TAX_RATE);
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      UPDATE players
+      SET zenies = MAX(zenies - ?, 0),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(cost, player.id);
+
+    db.prepare(`
+      UPDATE character_claims
+      SET character_id = ?,
+          claim_type = ?
+      WHERE id = ?
+    `).run(character.id, isSupreme ? 'supremo' : 'player', claim.id);
+  });
+
+  transaction();
+
+  return {
+    ok: true,
+    message: [
+      '🔁 *Personagem trocado com sucesso!*',
+      '',
+      `🌌 Universo: *${universeId}*`,
+      `Antigo: *${claim.character_name}*`,
+      `Novo: *${character.name}*`,
+      `💸 Taxa de troca: *${money(cost)} Zenies*`,
+      '',
+      'A taxa equivale a *25%* dos seus Zenies atuais.',
+    ].join('\n'),
+  };
+}
+
 module.exports = {
   registerCharacter,
   listCharacters,
   generateRescueCode,
   getProfile,
   validateUniverse,
+  addCharacterToUniverse,
+  removeCharacterFromUniverse,
+  trocarPersonagem,
 };

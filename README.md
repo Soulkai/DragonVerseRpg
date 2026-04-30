@@ -33,13 +33,35 @@ No primeiro start, escaneie o QR Code no terminal usando o WhatsApp.
 
 ## Configuração de admins
 
-No `.env`, coloque os números administradores em formato internacional, sem `+`, sem espaço e sem traços:
+Use no WhatsApp:
 
-```env
-ADMIN_NUMBERS=5567999999999,5567888888888
+```txt
+/meuid
 ```
 
+O bot vai mostrar:
+
+- se você já está sendo reconhecido como admin;
+- seu número limpo;
+- seu JID/LID completo;
+- os valores aceitos no `ADMIN_NUMBERS`.
+
+No `.env`, você pode usar número limpo, JID completo ou LID completo:
+
+```env
+ADMIN_NUMBERS=5567999999999
+```
+
+Em alguns grupos, o WhatsApp entrega o remetente como `@lid`. Se o número limpo não funcionar, coloque também o LID mostrado em `/meuid`:
+
+```env
+ADMIN_NUMBERS=5567999999999,123456789@lid
+```
+
+Depois de alterar o `.env`, reinicie o bot.
+
 Admins do `.env` podem usar os comandos administrativos mesmo sem cargo dentro do RPG.
+
 
 ## Configuração de fuso horário
 
@@ -384,3 +406,88 @@ assets/personagens/dragao-de-uma-estrela.png
 ```
 
 Se a imagem não existir, o comando `/Perfil` envia apenas o texto e mostra o caminho esperado.
+
+
+## Atualização v7 — personagens, troca e tigrinho
+
+### Lista oficial do Universo 2
+
+A lista inicial do Universo 2 foi atualizada conforme a versão enviada, incluindo:
+
+- Baby, Bibidi, Hit e Vegeta como personagens bloqueados.
+- Broly (DBZ), Chaos e Mr. Popo adicionados.
+- Android 18, Gohan, Goku Black, Goten, Janemba, Kale, Kid Buu, Majin Buu, Piccolo, Towa e Trunks do Futuro começam livres até alguém registrar no banco.
+
+### Novos comandos de personagem
+
+```txt
+/addpersonagem Nome do Personagem Block
+/addpersonagem Nome do Personagem Free
+/addpersonagem 3 Nome do Personagem Block
+/rmvpersonagem Nome do Personagem
+/rmvpersonagem 3 Nome do Personagem
+/Trocarpersonagem Nome do Personagem
+```
+
+`/Trocarpersonagem` só permite trocar para personagem livre do mesmo universo. A troca custa 25% dos Zenies atuais do jogador.
+
+### Novo evento: Tigrinho
+
+```txt
+/tigrinho valorapostado
+```
+
+Regras:
+
+- Aposta mínima: 1.000.000 Zenies.
+- Sem limite máximo, desde que o jogador tenha saldo.
+- Cada jogador pode apostar 3 vezes por dia.
+- 3 dragões 🐉 = recebe 2x a aposta.
+- 6 dragões 🐉 = recebe 5x a aposta.
+- 9 dragões 🐉 = recebe 10x a aposta.
+- 3 ou mais 💩 = perde o dobro da aposta.
+- Sem combinação vencedora = perde a aposta.
+
+
+## Atualização v8 — Transferência e Tigrinho novo
+
+### Transferência de Zenies
+
+```txt
+/transferir @pessoa valor
+```
+
+Exemplo:
+
+```txt
+/transferir @Goku 50000000
+```
+
+O bot desconta o valor do jogador que enviou, adiciona ao jogador marcado e registra a movimentação na tabela `transfer_history`.
+
+### Tigrinho com novos símbolos
+
+```txt
+/tigrinho valor
+```
+
+Regras:
+
+- Aposta mínima: `1.000.000 Zenies`.
+- Sem limite máximo, desde que o jogador tenha saldo.
+- Cada jogador pode apostar até `3 vezes por dia`.
+- 3 ou mais 💩 fazem o jogador perder o dobro da aposta.
+- Se mais de uma combinação sair, o bot paga a melhor combinação.
+
+Prêmios principais:
+
+| Símbolo | 3 iguais | 6 iguais | 9 iguais |
+|---|---:|---:|---:|
+| 🐉 Dragão | 2x | 5x | 10x |
+| 🐯 Tigre | 3x | 7x | 15x |
+| 🦍 Gorila | 4x | 8x | 20x |
+| 💎 Diamante | 5x | 10x | 25x |
+| ⭐ Estrela | 2x | 4x | 8x |
+| 🔥 Fogo | 2x | 4x | 8x |
+| 🍀 Trevo | 2x | 5x | 12x |
+| 🪙 Moeda | 2x | 3x | 6x |

@@ -17,8 +17,8 @@ const {
   getPlayerClaim,
 } = require('./playerService');
 
-function canAssignCargo(actorPlayer, targetPlayer, roleToAssign, message) {
-  if (isAdmin(message)) return { ok: true, reason: 'admin' };
+async function canAssignCargo(actorPlayer, targetPlayer, roleToAssign, message) {
+  if (await isAdmin(message)) return { ok: true, reason: 'admin' };
 
   const actorRoleId = actorPlayer?.cargo_id;
   if (isHighCouncilRoleId(actorRoleId)) return { ok: true, reason: 'alta-cupula' };
@@ -82,7 +82,7 @@ function setPlayerRole(targetPlayer, role) {
   return db.prepare('SELECT * FROM players WHERE id = ?').get(targetPlayer.id);
 }
 
-function addCargo(message, argsText) {
+async function addCargo(message, argsText) {
   const targetWhatsappId = getFirstMentionedId(message, argsText);
   if (!targetWhatsappId) {
     return { ok: false, message: 'Use assim: */addcargo @pessoa A.S* ou */addcargo @pessoa Kaioshin*' };
@@ -101,7 +101,7 @@ function addCargo(message, argsText) {
   const actor = getOrCreatePlayerFromMessage(message, { touch: true });
   const target = getOrCreatePlayerByWhatsAppId(targetWhatsappId, null, { touch: false });
 
-  const permission = canAssignCargo(actor, target, role, message);
+  const permission = await canAssignCargo(actor, target, role, message);
   if (!permission.ok) return permission;
 
   const updated = setPlayerRole(target, role);

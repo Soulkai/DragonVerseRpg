@@ -112,6 +112,22 @@ function migrate() {
       FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS transfer_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_player_id INTEGER NOT NULL,
+      to_player_id INTEGER NOT NULL,
+      amount INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(from_player_id) REFERENCES players(id) ON DELETE CASCADE,
+      FOREIGN KEY(to_player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_transfer_history_from
+    ON transfer_history(from_player_id, created_at);
+
+    CREATE INDEX IF NOT EXISTS idx_transfer_history_to
+    ON transfer_history(to_player_id, created_at);
+
     CREATE TABLE IF NOT EXISTS event_daily_stats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       player_id INTEGER NOT NULL,
@@ -123,6 +139,10 @@ function migrate() {
       emoji_reward_total INTEGER NOT NULL DEFAULT 0,
       auto_quiz_wins INTEGER NOT NULL DEFAULT 0,
       auto_quiz_reward_total INTEGER NOT NULL DEFAULT 0,
+      slot_plays INTEGER NOT NULL DEFAULT 0,
+      slot_bet_total INTEGER NOT NULL DEFAULT 0,
+      slot_reward_total INTEGER NOT NULL DEFAULT 0,
+      slot_loss_total INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(player_id, date_key),
@@ -176,7 +196,15 @@ function migrate() {
   `);
 
   patchExistingPlayersTable();
+  patchExistingEventDailyStatsTable();
   seedUniverse2();
+}
+
+function patchExistingEventDailyStatsTable() {
+  addColumnIfMissing('event_daily_stats', 'slot_plays', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing('event_daily_stats', 'slot_bet_total', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing('event_daily_stats', 'slot_reward_total', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing('event_daily_stats', 'slot_loss_total', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 function patchExistingPlayersTable() {

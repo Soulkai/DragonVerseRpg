@@ -1,7 +1,7 @@
-const { eventos, responder, guessLetter, guessWord, pegar } = require('../services/eventService');
+const { eventos, responder, guessLetter, guessWord, pegar, tigrinho } = require('../services/eventService');
 
 async function eventosCommand(message, command) {
-  const result = eventos(message, command.argsText);
+  const result = await eventos(message, command.argsText);
   await message.reply(result.message);
 }
 
@@ -25,10 +25,16 @@ async function pegarCommand(message) {
   await message.reply(result.message);
 }
 
+async function tigrinhoCommand(message, command) {
+  const result = tigrinho(message, command.argsText);
+  await message.reply(result.message);
+}
+
 module.exports = {
   eventosCommand,
   responderCommand,
   letraCommand,
   chutarCommand,
   pegarCommand,
+  tigrinhoCommand,
 };
