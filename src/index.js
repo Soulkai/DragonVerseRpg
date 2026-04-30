@@ -88,7 +88,7 @@ setInterval(() => {
 
 client.on('message', async (message) => {
   try {
-    const command = parseCommand(message.body || '', settings.prefix);
+    const command = parseCommand(message.body || '', settings.prefixes);
     if (!command) return;
 
     runMaintenanceIfNeeded(false);
