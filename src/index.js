@@ -59,6 +59,15 @@ async function runAutoEventsIfNeeded(force = false) {
   await runAutoEvents(client);
 }
 
+function buildPokerAliasCommand(command, actionName) {
+  return {
+    ...command,
+    name: 'poker',
+    args: [actionName, ...(command.args || [])],
+    argsText: [actionName, command.argsText].filter(Boolean).join(' '),
+  };
+}
+
 const client = new Client({
   authStrategy: new LocalAuth({
     clientId: 'dragonverse-rpg',
@@ -233,6 +242,15 @@ client.on('message', async (message) => {
 
       case 'poker':
         await pokerCommand(message, command, client);
+        break;
+
+      case 'check':
+      case 'cobrir':
+      case 'pote':
+      case 'out':
+      case 'sair':
+      case 'allin':
+        await pokerCommand(message, buildPokerAliasCommand(command, command.name), client);
         break;
 
       case 'truco':
