@@ -18,6 +18,18 @@ const {
   getPlayerClaim,
 } = require('./playerService');
 
+
+function mentionTagFromId(whatsappId = '') {
+  const id = String(whatsappId || '').trim();
+  if (!id) return '';
+  return id.split('@')[0].replace(/[^0-9a-zA-Z]/g, '');
+}
+
+function mentionPlayer(player) {
+  const tag = mentionTagFromId(player?.whatsapp_id) || String(player?.phone || '').replace(/\D/g, '');
+  return tag ? `@${tag}` : '@jogador';
+}
+
 async function canAssignCargo(actorPlayer, targetPlayer, roleToAssign, message) {
   if (await isAdmin(message)) return { ok: true, reason: 'admin' };
 
@@ -144,12 +156,13 @@ async function addCargo(message, argsText) {
     message: [
       '✅ *Cargo atualizado!*',
       '',
-      `👤 Jogador: @${updated.phone}`,
+      `👤 Jogador: ${mentionPlayer(updated)}`,
       role.category === ROLE_CATEGORIES.SECONDARY
         ? `🛠️ Trabalho: *${updated.trabalho}*`
         : `🎖️ Cargo: *${updated.cargo}*`,
       `💵 Salário total: *${money(updated.salario)} Zenies* a cada 2 dias`,
     ].join('\n'),
+    mentions: [updated.whatsapp_id],
   };
 }
 

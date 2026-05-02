@@ -7,6 +7,44 @@ const {
   getPlayerByWhatsAppId,
 } = require('./playerService');
 
+
+function getActiveDiscount(playerId) {
+  return db.prepare(`
+    SELECT * FROM player_discounts
+    WHERE player_id = ? AND uses > 0 AND percent > 0
+  `).get(playerId);
+}
+
+function previewPurchaseDiscount(playerId, originalPrice) {
+  const discount = getActiveDiscount(playerId);
+  const price = Number(originalPrice || 0);
+  if (!discount) {
+    return { finalPrice: price, discountPercent: 0, discountAmount: 0, hasDiscount: false };
+  }
+
+  const percent = Math.max(0, Math.min(100, Number(discount.percent || 0)));
+  const discountAmount = Math.floor(price * (percent / 100));
+  const finalPrice = Math.max(0, price - discountAmount);
+  return { finalPrice, discountPercent: percent, discountAmount, hasDiscount: true };
+}
+
+function consumePurchaseDiscount(playerId) {
+  db.prepare(`
+    UPDATE player_discounts
+    SET uses = uses - 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE player_id = ? AND uses > 0
+  `).run(playerId);
+
+  db.prepare(`DELETE FROM player_discounts WHERE player_id = ? AND uses <= 0`).run(playerId);
+}
+
+function applyPurchaseDiscount(playerId, originalPrice) {
+  const preview = previewPurchaseDiscount(playerId, originalPrice);
+  if (preview.hasDiscount) consumePurchaseDiscount(playerId);
+  return preview;
+}
+
 function formatShop() {
   const lines = [
     '┏━━━━━━━━━━━━━┓',
@@ -84,7 +122,9 @@ function buyNextKi(message) {
   const player = getOrCreatePlayerFromMessage(message, { touch: true });
   const currentKi = Number(player.ki_atual || 1);
   const nextKi = currentKi + 1;
-  const price = getKiPrice(nextKi);
+  const originalPrice = getKiPrice(nextKi);
+  const discount = previewPurchaseDiscount(player.id, originalPrice);
+  const price = discount.finalPrice;
 
   if (player.zenies < price) {
     return {
@@ -107,6 +147,7 @@ function buyNextKi(message) {
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(price, nextKi, player.id);
+  if (discount.hasDiscount) consumePurchaseDiscount(player.id);
 
   const updated = getPlayerByWhatsAppId(player.whatsapp_id);
   const atributos = Number(updated.ki_atual || 1) * KI_ATTRIBUTE_GAIN;
@@ -119,9 +160,10 @@ function buyNextKi(message) {
       `🔥 Ki anterior: *Ki ${formatKiLevel(currentKi)}*`,
       `🔥 Novo Ki: *Ki ${formatKiLevel(updated.ki_atual)}*`,
       `💪 Atributos totais: *${money(atributos)}*`,
+      discount.discountPercent > 0 ? `🏷️ Desconto aplicado: *${discount.discountPercent}%* (-${money(discount.discountAmount)} Zenies)` : null,
       `💸 Valor pago: *${money(price)} Zenies*`,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
-    ].join('\n'),
+    ].filter(Boolean).join('\n'),
   };
 }
 
@@ -136,14 +178,17 @@ function buyItem(message, itemName) {
     };
   }
 
-  if (player.zenies < item.price) {
+  const discount = previewPurchaseDiscount(player.id, item.price);
+  const price = discount.finalPrice;
+
+  if (player.zenies < price) {
     return {
       ok: false,
       message: [
         '❌ *Zenies insuficientes para comprar esse item.*',
         '',
         `🛒 Item: *${item.name}*`,
-        `💰 Preço: *${money(item.price)} Zenies*`,
+        `💰 Preço: *${money(price)} Zenies*`,
         `💰 Seu saldo: *${money(player.zenies)} Zenies*`,
       ].join('\n'),
     };
@@ -155,7 +200,7 @@ function buyItem(message, itemName) {
       SET zenies = zenies - ?,
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(item.price, player.id);
+    `).run(price, player.id);
 
     db.prepare(`
       INSERT INTO player_inventory (player_id, item_id, item_name, quantity)
@@ -169,7 +214,9 @@ function buyItem(message, itemName) {
     db.prepare(`
       INSERT INTO purchase_history (player_id, purchase_type, target_id, target_name, price)
       VALUES (?, 'item', ?, ?, ?)
-    `).run(player.id, item.id, item.name, item.price);
+    `).run(player.id, item.id, item.name, price);
+
+    if (discount.hasDiscount) consumePurchaseDiscount(player.id);
   });
 
   transaction();
@@ -187,10 +234,11 @@ function buyItem(message, itemName) {
       '',
       `🛒 Item: *${item.name}*`,
       `🎖️ Rank: *${item.rank}*`,
-      `💸 Valor pago: *${money(item.price)} Zenies*`,
+      discount.discountPercent > 0 ? `🏷️ Desconto aplicado: *${discount.discountPercent}%* (-${money(discount.discountAmount)} Zenies)` : null,
+      `💸 Valor pago: *${money(price)} Zenies*`,
       `📦 Quantidade no inventário: *${inventory?.quantity || 1}*`,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
-    ].join('\n'),
+    ].filter(Boolean).join('\n'),
   };
 }
 
@@ -240,4 +288,8 @@ module.exports = {
   buyNextKi,
   buyItem,
   getInventory,
+  getActiveDiscount,
+  previewPurchaseDiscount,
+  consumePurchaseDiscount,
+  applyPurchaseDiscount,
 };

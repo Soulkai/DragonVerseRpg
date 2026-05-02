@@ -4,6 +4,9 @@ const { isAdmin } = require('../utils/admin');
 const { normalizeText } = require('../utils/text');
 const { money } = require('../utils/format');
 const { parseAmount } = require('../utils/numbers');
+const { grantZenies } = require('./rewardService');
+const { registerPresence, formatStreakStatus, localDateKey } = require('./streakService');
+const { createDailyBountyForChat, formatBounty } = require('./bountyService');
 const {
   getOrCreatePlayerFromMessage,
   getOrCreatePlayerByWhatsAppId,
@@ -39,6 +42,18 @@ const TIGRINHO_SYMBOLS = [
   { emoji: '🪙', name: 'Moeda', weight: 10, payouts: { 3: 2, 6: 3, 9: 6 } },
   { emoji: '💩', name: 'Coco', weight: 8, payouts: null },
 ];
+
+
+function mentionTagFromId(whatsappId = '') {
+  const id = String(whatsappId || '').trim();
+  if (!id) return '';
+  return id.split('@')[0].replace(/[^0-9a-zA-Z]/g, '');
+}
+
+function mentionPlayer(player) {
+  const tag = mentionTagFromId(player?.whatsapp_id) || String(player?.phone || '').replace(/\D/g, '');
+  return tag ? `@${tag}` : '@jogador';
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -179,13 +194,8 @@ function consumeManualParticipation(playerId) {
   `).run(playerId, key);
 }
 
-function addZeniesToPlayer(playerId, amount) {
-  db.prepare(`
-    UPDATE players
-    SET zenies = zenies + ?,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(amount, playerId);
+function addZeniesToPlayer(playerId, amount, source = 'evento') {
+  grantZenies(playerId, amount, source);
 }
 
 function rewardManualEvent(playerId) {
@@ -194,7 +204,8 @@ function rewardManualEvent(playerId) {
   const remaining = MANUAL_DAILY_REWARD_LIMIT - Number(stats.manual_reward_total || 0);
   const reward = Math.max(0, Math.min(MANUAL_EVENT_REWARD, remaining));
 
-  if (reward > 0) addZeniesToPlayer(playerId, reward);
+  if (reward > 0) addZeniesToPlayer(playerId, reward, 'manual_event');
+  if (reward > 0) registerPresence(playerId, 'manual_event');
 
   db.prepare(`
     UPDATE event_daily_stats
@@ -209,7 +220,8 @@ function rewardManualEvent(playerId) {
 
 function rewardEmojiEvent(playerId) {
   const key = dateKey();
-  addZeniesToPlayer(playerId, DRAGON_EMOJI_REWARD);
+  addZeniesToPlayer(playerId, DRAGON_EMOJI_REWARD, 'dragon_emoji');
+  registerPresence(playerId, 'dragon_emoji');
   db.prepare(`
     UPDATE event_daily_stats
     SET emoji_claims = emoji_claims + 1,
@@ -221,7 +233,8 @@ function rewardEmojiEvent(playerId) {
 
 function rewardAutoQuiz(playerId) {
   const key = dateKey();
-  addZeniesToPlayer(playerId, AUTO_QUIZ_REWARD);
+  addZeniesToPlayer(playerId, AUTO_QUIZ_REWARD, 'auto_quiz');
+  registerPresence(playerId, 'auto_quiz');
   db.prepare(`
     UPDATE event_daily_stats
     SET auto_quiz_wins = auto_quiz_wins + 1,
@@ -320,6 +333,67 @@ function formatHangman(state) {
   ].join('\n');
 }
 
+function eventRewardExpression() {
+  return `COALESCE(manual_reward_total, 0) + COALESCE(emoji_reward_total, 0) + COALESCE(auto_quiz_reward_total, 0) + COALESCE(slot_reward_total, 0)`;
+}
+
+function eventRanking(period = 'diario') {
+  const today = localDateKey();
+  let where = 'eds.date_key = ?';
+  let params = [today];
+  let title = 'Ranking diário de eventos';
+
+  if (['semanal', 'semana', 'weekly'].includes(period)) {
+    where = `date(eds.date_key) >= date(?, '-6 days')`;
+    params = [today];
+    title = 'Ranking semanal de eventos';
+  }
+
+  const rows = db.prepare(`
+    SELECT p.whatsapp_id, p.phone, p.display_name,
+           SUM(${eventRewardExpression()}) AS total,
+           SUM(COALESCE(manual_wins, 0) + COALESCE(emoji_claims, 0) + COALESCE(auto_quiz_wins, 0)) AS wins,
+           SUM(COALESCE(manual_participations, 0)) AS participations
+    FROM event_daily_stats eds
+    JOIN players p ON p.id = eds.player_id
+    WHERE ${where}
+    GROUP BY p.id
+    HAVING total > 0 OR participations > 0
+    ORDER BY total DESC, wins DESC
+    LIMIT 10
+  `).all(...params);
+
+  if (rows.length === 0) {
+    return { ok: true, message: `📊 *${title}*\n\nAinda não há pontuação registrada.` };
+  }
+
+  return {
+    ok: true,
+    message: [
+      `╭━━⪩ 📊 *${title.toUpperCase()}* ⪨━━`,
+      '▢',
+      ...rows.map((row, index) => `▢ ${index + 1}. ${mentionPlayer(row)} — *${money(row.total)} Zenies* | vitórias: ${row.wins || 0}`),
+      '╰━━─「📊」─━━',
+    ].join('\n'),
+    mentions: rows.map((row) => row.whatsapp_id),
+  };
+}
+
+function presenceEvent(message) {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const streak = registerPresence(player.id, 'presenca');
+  return {
+    ok: true,
+    message: [
+      streak.changed ? '✅ *Presença registrada!*' : 'ℹ️ Você já registrou presença hoje.',
+      '',
+      formatStreakStatus(player.id),
+      streak.rewards?.length ? '' : null,
+      ...(streak.rewards || []),
+    ].filter(Boolean).join('\n'),
+  };
+}
+
 function eventList(message) {
   const player = getOrCreatePlayerFromMessage(message, { touch: true });
   const stats = ensurePlayerDailyStats(player.id);
@@ -341,33 +415,31 @@ function eventList(message) {
       '*/eventos pergunta* — Sorteia uma pergunta de Dragon Ball.',
       '*/eventos forca* — Começa uma forca de Dragon Ball.',
       '*/eventos desafio* — Sorteia um desafio rápido do RPG.',
+      '*/presenca* ou */eventos presenca* — Marca presença e streak.',
+      '*/rankeventos diario* — Ranking diário.',
+      '*/rankeventos semanal* — Ranking semanal.',
       '*/responder A* — Responde pergunta/desafio.',
       '*/letra A* — Tenta uma letra na forca.',
       '*/chutar Kamehameha* — Tenta finalizar a forca.',
       '',
+      '🎁 *Caixas*',
+      '*/caixa* — Mostra caixas e colecionáveis.',
+      '*/caixa abrir 10kk* — Abre caixa.',
+      '',
       '🎰 *Caça-níquel / Tigrinho*',
       '*/tigrinho valor* — aposta mínima de *1.000.000 Zenies*.',
-      'Combinações principais:',
-      '🐉 Dragão: 3=2x | 6=5x | 9=10x.',
-      '🐯 Tigre: 3=3x | 6=7x | 9=15x.',
-      '🦍 Gorila: 3=4x | 6=8x | 9=20x.',
-      '💎 Diamante: 3=5x | 6=10x | 9=25x.',
-      '⭐/🔥/🍀/🪙 também dão prêmios menores.',
-      '3 💩 ou mais = perde o dobro da aposta.',
       `Limite: *${TIGRINHO_DAILY_LIMIT} apostas por dia*.`,
-      '',
-      '🃏 *Jogos de cartas*',
-      '*/blackjack iniciar valor* — Joga Blackjack contra a mesa no grupo.',
-      '*/poker criar valor* — Cria mesa de Poker; cartas vão no privado.',
-      '*/truco criar* — Cria Truco Paulista limpo; cartas vão no privado.',
       '',
       '🐲 *Eventos automáticos do grupo*',
       `Emoji do dragão: a cada hora, até *${DRAGON_EMOJI_DAILY_LIMIT_PER_CHAT} por dia*. Primeiro */pegar* ganha *${money(DRAGON_EMOJI_REWARD)} Zenies*.`,
       `Pergunta relâmpago: *${AUTO_QUIZ_DAILY_LIMIT_PER_CHAT} vezes por dia*. Primeiro acerto ganha *${money(AUTO_QUIZ_REWARD)} Zenies*.`,
+      '🎯 Caça-cabeça: o bot sorteia um habitante do universo por dia.',
       '',
       '⚙️ *Admin:*',
       '*/eventos ativar* — Ativa eventos automáticos neste chat.',
       '*/eventos desativar* — Desativa eventos automáticos neste chat.',
+      '*/vitoria caça* — Dá vitória para a caça atual.',
+      '*/vitoria caçador @pessoa* — Encerra a caça e premia o caçador.',
       '',
       '📊 *Seu status hoje:*',
       `Participações: *${stats.manual_participations}/${MANUAL_DAILY_LIMIT}*`,
@@ -376,6 +448,8 @@ function eventList(message) {
       `Apostas no tigrinho: *${stats.slot_plays || 0}/${TIGRINHO_DAILY_LIMIT}*`,
       `Total apostado: *${money(stats.slot_bet_total || 0)} Zenies*`,
       `Total recebido no tigrinho: *${money(stats.slot_reward_total || 0)} Zenies*`,
+      '',
+      formatStreakStatus(player.id),
     ].join('\n'),
   };
 }
@@ -523,6 +597,11 @@ async function eventos(message, argsText = '') {
   if (['forca', 'hangman'].includes(action)) return startHangmanEvent(message);
   if (['desafio', 'treino', 'rapido', 'rápido'].includes(action)) return startQuickChallenge(message);
   if (['status', 'meustatus', 'meu status'].includes(action)) return eventList(message);
+  if (['presenca', 'presença', 'streak'].includes(action)) return presenceEvent(message);
+  if (action.startsWith('ranking') || action.startsWith('rank')) {
+    const period = action.includes('seman') ? 'semanal' : 'diario';
+    return eventRanking(period);
+  }
 
   return {
     ok: false,
@@ -590,8 +669,9 @@ function answerAutoQuiz(message, answerRaw) {
     message: [
       '⚡ *Pergunta relâmpago respondida!*',
       '',
-      `@${player.phone} acertou primeiro e ganhou *${money(AUTO_QUIZ_REWARD)} Zenies*!`,
+      `${mentionPlayer(player)} acertou primeiro e ganhou *${money(AUTO_QUIZ_REWARD)} Zenies*!`,
     ].join('\n'),
+    mentions: [player.whatsapp_id],
   };
 }
 
@@ -727,8 +807,9 @@ function pegar(message) {
     message: [
       '🐉 *Dragão capturado!*',
       '',
-      `@${player.phone} pegou primeiro e ganhou *${money(DRAGON_EMOJI_REWARD)} Zenies*!`,
+      `${mentionPlayer(player)} pegou primeiro e ganhou *${money(DRAGON_EMOJI_REWARD)} Zenies*!`,
     ].join('\n'),
+    mentions: [player.whatsapp_id],
   };
 }
 
@@ -985,6 +1066,10 @@ function tigrinho(message, argsText = '') {
   });
 
   transaction();
+  if (reward > 0) {
+    const { applyReferralBonus } = require('./rewardService');
+    applyReferralBonus(player.id, reward, 'tigrinho');
+  }
 
   const updated = db.prepare('SELECT zenies FROM players WHERE id = ?').get(player.id);
   const newStats = ensurePlayerDailyStats(player.id);
@@ -1025,6 +1110,12 @@ async function runAutoEvents(client) {
         await sendDragonEmojiEvent(client, chat.chat_id);
       }
 
+      const bounty = createDailyBountyForChat(chat.chat_id, settings.defaultUniverse);
+      if (bounty) {
+        const formatted = formatBounty(bounty);
+        await client.sendMessage(chat.chat_id, formatted.message, { mentions: formatted.mentions || [] });
+      }
+
       const refreshed = db.prepare('SELECT * FROM event_chats WHERE chat_id = ?').get(chat.chat_id) || chat;
       if (shouldSendAutoQuiz(refreshed)) {
         await sendAutoQuizEvent(client, chat.chat_id);
@@ -1042,6 +1133,8 @@ module.exports = {
   guessWord,
   pegar,
   tigrinho,
+  eventRanking,
+  presenceEvent,
   runAutoEvents,
   cleanupExpiredEvents,
 };

@@ -3,6 +3,7 @@ const { isAdmin } = require('../utils/admin');
 const { getFirstMentionedId, removeFirstMention } = require('../utils/mentions');
 const { parseAmount, parseInteger } = require('../utils/numbers');
 const { money, formatKiLevel } = require('../utils/format');
+const { grantZenies } = require('./rewardService');
 const {
   DAY_MS,
   SALARY_INTERVAL_DAYS,
@@ -22,6 +23,22 @@ async function requireAdmin(message) {
   if (['A.S', 'S.M'].includes(player.cargo_id)) return { ok: true };
 
   return { ok: false, message: 'Apenas administradores, Autoridade Suprema ou Supremo Ministro podem usar esse comando.' };
+}
+
+
+function mentionTagFromId(whatsappId = '') {
+  const id = String(whatsappId || '').trim();
+  if (!id) return '';
+  return id.split('@')[0].replace(/[^0-9a-zA-Z]/g, '');
+}
+
+function mentionPlayer(player) {
+  const tag = mentionTagFromId(player?.whatsapp_id) || String(player?.phone || '').replace(/\D/g, '');
+  return tag ? `@${tag}` : '@jogador';
+}
+
+function mentionIds(...players) {
+  return [...new Set(players.map((player) => player?.whatsapp_id).filter(Boolean))];
 }
 
 async function addZenies(message, argsText) {
@@ -54,10 +71,11 @@ async function addZenies(message, argsText) {
     message: [
       '✅ *Zenies adicionados!*',
       '',
-      `👤 Jogador: @${updated.phone}`,
+      `👤 Jogador: ${mentionPlayer(updated)}`,
       `➕ Valor: *${money(amount)} Zenies*`,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
     ].join('\n'),
+    mentions: mentionIds(updated),
   };
 }
 
@@ -93,11 +111,12 @@ async function retirarZenies(message, argsText) {
     message: [
       '✅ *Zenies retirados!*',
       '',
-      `👤 Jogador: @${updated.phone}`,
+      `👤 Jogador: ${mentionPlayer(updated)}`,
       `➖ Valor solicitado: *${money(amount)} Zenies*`,
       `💸 Valor retirado: *${money(discount)} Zenies*`,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
     ].join('\n'),
+    mentions: mentionIds(updated),
   };
 }
 
@@ -131,10 +150,11 @@ async function definirKi(message, argsText) {
     message: [
       '✅ *Ki definido!*',
       '',
-      `👤 Jogador: @${updated.phone}`,
+      `👤 Jogador: ${mentionPlayer(updated)}`,
       `🔥 Ki atual: *Ki ${formatKiLevel(updated.ki_atual)}*`,
       `💪 Atributos totais: *${money(updated.ki_atual * 4_000_000)}*`,
     ].join('\n'),
+    mentions: mentionIds(updated),
   };
 }
 
@@ -196,12 +216,13 @@ function transferZenies(message, argsText, options = {}) {
     message: [
       '✅ *PIX DragonVerse realizado!*',
       '',
-      `📤 De: @${updatedSender.phone}`,
-      `📥 Para: @${updatedTarget.phone}`,
+      `📤 De: ${mentionPlayer(updatedSender)}`,
+      `📥 Para: ${mentionPlayer(updatedTarget)}`,
       `💸 Valor: *${money(amount)} Zenies*`,
       '',
       `💰 Seu saldo atual: *${money(updatedSender.zenies)} Zenies*`,
     ].join('\n'),
+    mentions: mentionIds(updatedSender, updatedTarget),
   };
 }
 
@@ -245,6 +266,42 @@ function depositar(message, argsText) {
   };
 }
 
+function retirarPoupanca(message, argsText = '') {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const first = String(argsText || '').trim().split(/\s+/)[0];
+  const amount = ['tudo', 'all', 'total'].includes(first?.toLowerCase())
+    ? Number(player.deposito || 0)
+    : parseAmount(first);
+
+  if (!amount || amount <= 0) {
+    return { ok: false, message: 'Use assim: */retirarpoupanca valor* ou */retirarpoupanca tudo*' };
+  }
+
+  if (Number(player.deposito || 0) < amount) {
+    return { ok: false, message: `Saldo insuficiente na poupança. Você tem *${money(player.deposito)} Zenies* depositados.` };
+  }
+
+  db.prepare(`
+    UPDATE players
+    SET deposito = deposito - ?,
+        zenies = zenies + ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(amount, amount, player.id);
+
+  const updated = getPlayerByWhatsAppId(player.whatsapp_id);
+  return {
+    ok: true,
+    message: [
+      '🏦 *Retirada da poupança realizada!*',
+      '',
+      `📤 Retirado: *${money(amount)} Zenies*`,
+      `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
+      `🏦 Restante na poupança: *${money(updated.deposito)} Zenies*`,
+    ].join('\n'),
+  };
+}
+
 function applyDueSalaries() {
   const players = db.prepare(`
     SELECT * FROM players
@@ -256,10 +313,9 @@ function applyDueSalaries() {
   let updatedCount = 0;
   let totalPaid = 0;
 
-  const update = db.prepare(`
+  const updateDate = db.prepare(`
     UPDATE players
-    SET zenies = zenies + ?,
-        last_salary_at = ?,
+    SET last_salary_at = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `);
@@ -274,7 +330,8 @@ function applyDueSalaries() {
 
       const payment = periods * Number(player.salario || 0);
       const nextDate = new Date(last + periods * intervalMs).toISOString();
-      update.run(payment, nextDate, player.id);
+      grantZenies(player.id, payment, 'salario');
+      updateDate.run(nextDate, player.id);
       updatedCount += 1;
       totalPaid += payment;
     }
@@ -295,10 +352,9 @@ function applyDueDepositInterest() {
   let updatedCount = 0;
   let totalInterest = 0;
 
-  const update = db.prepare(`
+  const updateDate = db.prepare(`
     UPDATE players
-    SET zenies = zenies + ?,
-        last_deposit_interest_at = ?,
+    SET last_deposit_interest_at = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `);
@@ -313,7 +369,8 @@ function applyDueDepositInterest() {
 
       const interest = Math.floor(Number(player.deposito || 0) * DEPOSIT_INTEREST_RATE * periods);
       const nextDate = new Date(last + periods * intervalMs).toISOString();
-      update.run(interest, nextDate, player.id);
+      grantZenies(player.id, interest, 'juros_poupanca');
+      updateDate.run(nextDate, player.id);
       updatedCount += 1;
       totalInterest += interest;
     }
@@ -335,6 +392,7 @@ module.exports = {
   definirKi,
   transferZenies,
   depositar,
+  retirarPoupanca,
   applyDueSalaries,
   applyDueDepositInterest,
   runEconomyMaintenance,

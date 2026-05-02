@@ -237,8 +237,8 @@ function generateRescueCode(message, universeId, characterName) {
   };
 }
 
-function getProfile(message) {
-  const whatsappId = getWhatsAppIdFromMessage(message);
+function getProfile(message, targetWhatsappId = null) {
+  const whatsappId = targetWhatsappId || getWhatsAppIdFromMessage(message);
   const player = db.prepare('SELECT * FROM players WHERE whatsapp_id = ?').get(whatsappId);
 
   if (!player) return { ok: false, message: 'Você ainda não tem perfil. Use */Registro 2 Nome do Personagem*.' };

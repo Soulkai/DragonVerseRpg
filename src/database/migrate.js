@@ -195,11 +195,145 @@ function migrate() {
     ON active_events(player_id, status);
   `);
 
+
+  createDragonVerseExtraTables();
+  patchExistingBoxOpeningsTable();
   patchExistingPlayersTable();
   patchExistingEventDailyStatsTable();
   patchCharacterClaimIndexes();
   syncSupremeCharacterClaims();
   seedUniverse2();
+}
+
+
+
+function patchExistingBoxOpeningsTable() {
+  addColumnIfMissing('box_openings', 'date_key', 'TEXT');
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_box_openings_daily
+    ON box_openings(player_id, date_key);
+  `);
+}
+
+function createDragonVerseExtraTables() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS event_streaks (
+      player_id INTEGER PRIMARY KEY,
+      current_streak INTEGER NOT NULL DEFAULT 0,
+      best_streak INTEGER NOT NULL DEFAULT 0,
+      last_presence_date TEXT,
+      rewarded_thresholds TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS referral_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL UNIQUE,
+      code TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS player_referrals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recruit_id INTEGER NOT NULL UNIQUE,
+      recruiter_id INTEGER NOT NULL,
+      code TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      bonus_expires_at TEXT NOT NULL,
+      total_bonus_paid INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY(recruit_id) REFERENCES players(id) ON DELETE CASCADE,
+      FOREIGN KEY(recruiter_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS generic_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      type TEXT NOT NULL,
+      value INTEGER NOT NULL,
+      max_redemptions INTEGER NOT NULL,
+      redeemed_count INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      is_active INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS generic_code_redemptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code_id INTEGER NOT NULL,
+      player_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(code_id, player_id),
+      FOREIGN KEY(code_id) REFERENCES generic_codes(id) ON DELETE CASCADE,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS player_discounts (
+      player_id INTEGER PRIMARY KEY,
+      percent INTEGER NOT NULL DEFAULT 0,
+      uses INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS box_openings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      box_id TEXT NOT NULL,
+      price INTEGER NOT NULL,
+      money_reward INTEGER NOT NULL DEFAULT 0,
+      collectible_id TEXT,
+      collectible_name TEXT,
+      date_key TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS player_collectibles (
+      player_id INTEGER NOT NULL,
+      collectible_id TEXT NOT NULL,
+      collectible_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      completed_sets INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(player_id, collectible_id),
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS bounty_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id TEXT NOT NULL,
+      universe_id INTEGER NOT NULL,
+      target_player_id INTEGER NOT NULL,
+      target_character_name TEXT,
+      date_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      target_wins INTEGER NOT NULL DEFAULT 0,
+      hunter_wins INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ended_at TEXT,
+      UNIQUE(chat_id, date_key),
+      FOREIGN KEY(target_player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS bounty_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bounty_id INTEGER NOT NULL,
+      winner_type TEXT NOT NULL,
+      winner_player_id INTEGER,
+      reward INTEGER NOT NULL,
+      created_by TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(bounty_id) REFERENCES bounty_events(id) ON DELETE CASCADE,
+      FOREIGN KEY(winner_player_id) REFERENCES players(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_event_daily_stats_date ON event_daily_stats(date_key);
+    CREATE INDEX IF NOT EXISTS idx_player_referrals_recruit ON player_referrals(recruit_id, bonus_expires_at);
+    CREATE INDEX IF NOT EXISTS idx_bounty_events_lookup ON bounty_events(chat_id, date_key, status);
+  `);
 }
 
 function patchCharacterClaimIndexes() {

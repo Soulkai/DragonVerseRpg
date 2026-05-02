@@ -12,16 +12,20 @@ const { addZeniesCommand, retirarZeniesCommand, definirKiCommand } = require('./
 const { addUniversoCommand } = require('./commands/addUniverso');
 const { addCargoCommand } = require('./commands/addCargo');
 const { cargosCommand } = require('./commands/cargos');
-const { depositarCommand } = require('./commands/depositar');
+const { depositarCommand, retirarPoupancaCommand } = require('./commands/depositar');
 const { pixCommand } = require('./commands/pix');
 const { lojaCommand } = require('./commands/loja');
 const { comprarCommand } = require('./commands/comprar');
 const { inventarioCommand } = require('./commands/inventario');
-const { eventosCommand, responderCommand, letraCommand, chutarCommand, pegarCommand, tigrinhoCommand } = require('./commands/eventos');
+const { eventosCommand, responderCommand, letraCommand, chutarCommand, pegarCommand, tigrinhoCommand, rankEventosCommand, presencaCommand } = require('./commands/eventos');
 const { addPersonagemCommand, rmvPersonagemCommand } = require('./commands/personagemAdmin');
 const { trocarPersonagemCommand } = require('./commands/trocarPersonagem');
 const { meuIdCommand } = require('./commands/meuId');
-const { blackjackCommand, pokerCommand, trucoCommand } = require('./commands/cardGames');
+const { blackjackCommand, pokerCommand, trucoCommand, regrasCommand } = require('./commands/cardGames');
+const { conviteCommand } = require('./commands/convite');
+const { codesCommand, resgatarCommand } = require('./commands/codes');
+const { caixaCommand } = require('./commands/caixa');
+const { vitoriaCommand, bountyCommand } = require('./commands/bounty');
 const { runEconomyMaintenance } = require('./services/economyService');
 const { purgeInactiveCharacters } = require('./services/inactivityService');
 const { touchPlayerActivity } = require('./services/playerService');
@@ -57,15 +61,6 @@ async function runAutoEventsIfNeeded(force = false) {
 
   lastAutoEventsAt = now;
   await runAutoEvents(client);
-}
-
-function buildPokerAliasCommand(command, actionName) {
-  return {
-    ...command,
-    name: 'poker',
-    args: [actionName, ...(command.args || [])],
-    argsText: [actionName, command.argsText].filter(Boolean).join(' '),
-  };
 }
 
 const client = new Client({
@@ -143,15 +138,15 @@ client.on('message', async (message) => {
         break;
 
       case 'addzenies':
-        await addZeniesCommand(message, command);
+        await addZeniesCommand(message, command, client);
         break;
 
       case 'retirarzenies':
-        await retirarZeniesCommand(message, command);
+        await retirarZeniesCommand(message, command, client);
         break;
 
       case 'definirki':
-        await definirKiCommand(message, command);
+        await definirKiCommand(message, command, client);
         break;
 
       case 'adduniverso':
@@ -175,7 +170,7 @@ client.on('message', async (message) => {
         break;
 
       case 'addcargo':
-        await addCargoCommand(message, command);
+        await addCargoCommand(message, command, client);
         break;
 
       case 'cargos':
@@ -183,38 +178,100 @@ client.on('message', async (message) => {
         break;
 
       case 'depositar':
-        await depositarCommand(message, command);
+        await depositarCommand(message, command, client);
+        break;
+
+      case 'retirarpoupanca':
+      case 'retirar poupanca':
+      case 'retirar poupança':
+      case 'sacarpoupanca':
+      case 'sacar poupanca':
+        await retirarPoupancaCommand(message, command, client);
         break;
 
       case 'pix':
-        await pixCommand(message, command);
+        await pixCommand(message, command, client);
         break;
 
       case 'transferir':
         await message.reply('Esse comando mudou para */pix @pessoa valor*.');
         break;
 
+      case 'convite':
+      case 'convites':
+        await conviteCommand(message, command, client);
+        break;
+
+      case 'codes':
+      case 'code':
+        await codesCommand(message, command, client);
+        break;
+
+      case 'resgatar':
+      case 'usarcode':
+      case 'usar code':
+        await resgatarCommand(message, command, client);
+        break;
+
+      case 'caixa':
+      case 'caixas':
+        await caixaCommand(message, command, client);
+        break;
+
       case 'eventos':
       case 'evento':
-        await eventosCommand(message, command);
+        await eventosCommand(message, command, client);
+        break;
+
+      case 'rankeventos':
+      case 'rankingeventos':
+        await rankEventosCommand(message, command, client);
+        break;
+
+      case 'rank':
+      case 'ranking':
+        if (String(command.argsText || '').toLowerCase().includes('evento')) {
+          await rankEventosCommand(message, command, client);
+        }
+        break;
+
+      case 'presenca':
+      case 'presença':
+        await presencaCommand(message, command, client);
+        break;
+
+      case 'cacacabeca':
+      case 'cacacabeça':
+        await bountyCommand(message, command, client);
+        break;
+
+      case 'caca':
+        if (String(command.argsText || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').startsWith('cabeca')) {
+          await bountyCommand(message, command, client);
+        }
+        break;
+
+      case 'vitoria':
+      case 'vitória':
+        await vitoriaCommand(message, command, client);
         break;
 
       case 'responder':
       case 'resposta':
-        await responderCommand(message, command);
+        await responderCommand(message, command, client);
         break;
 
       case 'letra':
-        await letraCommand(message, command);
+        await letraCommand(message, command, client);
         break;
 
       case 'chutar':
       case 'chute':
-        await chutarCommand(message, command);
+        await chutarCommand(message, command, client);
         break;
 
       case 'pegar':
-        await pegarCommand(message, command);
+        await pegarCommand(message, command, client);
         break;
 
       case 'tigrinho':
@@ -222,7 +279,7 @@ client.on('message', async (message) => {
       case 'cacaniquel':
       case 'caçaníquel':
       case 'caca niquel':
-        await tigrinhoCommand(message, command);
+        await tigrinhoCommand(message, command, client);
         break;
 
       case 'menu':
@@ -240,21 +297,37 @@ client.on('message', async (message) => {
         await blackjackCommand(message, command, client);
         break;
 
+      case 'carta':
+      case 'hit':
+      case 'parar':
+        await blackjackCommand(message, { ...command, argsText: command.name }, client);
+        break;
+
       case 'poker':
         await pokerCommand(message, command, client);
         break;
 
       case 'check':
       case 'cobrir':
-      case 'pote':
       case 'out':
-      case 'sair':
+      case 'pote':
       case 'allin':
-        await pokerCommand(message, buildPokerAliasCommand(command, command.name), client);
+      case 'all-in':
+      case 'sair':
+        await pokerCommand(message, { ...command, argsText: command.name }, client);
+        break;
+
+      case 'apostar':
+        await pokerCommand(message, { ...command, argsText: `apostar ${command.argsText || ''}`.trim() }, client);
         break;
 
       case 'truco':
         await trucoCommand(message, command, client);
+        break;
+
+      case 'regras':
+      case 'regra':
+        await regrasCommand(message, command, client);
         break;
 
       default:

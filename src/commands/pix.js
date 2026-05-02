@@ -1,8 +1,9 @@
 const { transferZenies } = require('../services/economyService');
+const { replyWithMentions } = require('../utils/reply');
 
-async function pixCommand(message, command) {
+async function pixCommand(message, command, client) {
   const result = transferZenies(message, command.argsText, { commandName: 'pix' });
-  await message.reply(result.message);
+  await replyWithMentions(message, result, client);
 }
 
 module.exports = { pixCommand };
