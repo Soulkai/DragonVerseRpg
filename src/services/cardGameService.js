@@ -4,8 +4,11 @@ const { money } = require('../utils/format');
 const { normalizeText } = require('../utils/text');
 const { getOrCreatePlayerFromMessage, getPlayerByWhatsAppId } = require('./playerService');
 const { grantZenies } = require('./rewardService');
+const { recordLedger } = require('./ledgerService');
 
 const MIN_CARD_BET = 1_000_000;
+const POKER_TURN_TIMEOUT_MS = 2 * 60 * 1000;
+const TRUCO_TURN_TIMEOUT_MS = 3 * 60 * 1000;
 
 const blackjackGames = new Map();
 const pokerGames = new Map();
@@ -36,7 +39,9 @@ const POKER_VALUES = {
 };
 
 const TRUCO_RANKS_LOW_TO_HIGH = ['4', '5', '6', '7', 'Q', 'J', 'K', 'A', '2', '3'];
+const TRUCO_CLEAN_RANKS_LOW_TO_HIGH = ['Q', 'J', 'K', 'A', '2', '3'];
 const TRUCO_DECK_RANKS = ['3', '2', 'A', 'K', 'J', 'Q', '7', '6', '5', '4'];
+const TRUCO_CLEAN_DECK_RANKS = ['3', '2', 'A', 'K', 'J', 'Q'];
 const TRUCO_TARGET_POINTS = 12;
 
 function normalizeAction(value = '') {
@@ -96,6 +101,14 @@ function removeZenies(playerId, amount) {
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(amount, playerId);
+
+  recordLedger({
+    playerId,
+    direction: 'saida',
+    category: 'jogos_cartas_aposta',
+    amount,
+    description: 'Aposta em jogo de cartas',
+  });
 }
 
 function getFreshPlayer(player) {
@@ -150,6 +163,39 @@ function mentionIds(players = []) {
   return [...new Set(players.map((player) => player?.whatsapp_id).filter(Boolean))];
 }
 
+function clearTurnTimer(game) {
+  if (game?.turnTimer) {
+    clearTimeout(game.turnTimer);
+    game.turnTimer = null;
+  }
+}
+
+function setManagedTimeout(callback, delay) {
+  const timer = setTimeout(callback, delay);
+  if (typeof timer.unref === 'function') timer.unref();
+  return timer;
+}
+
+async function sendGameResult(client, chatId, result) {
+  if (!client || !chatId || !result?.message) return;
+
+  try {
+    await client.sendMessage(chatId, result.message, {
+      mentions: result.mentions || [],
+    });
+  } catch (error) {
+    console.error('[cards] Falha ao enviar mensagem automática:', error.message);
+  }
+}
+
+function formatRemainingTime(deadlineAt) {
+  if (!deadlineAt) return null;
+  const seconds = Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(rest).padStart(2, '0')}`;
+}
+
 function splitByTeam(game, teamId) {
   return game.players.filter((player) => player.team === teamId);
 }
@@ -168,6 +214,7 @@ function pokerRules() {
     '▢ • A melhor combinação de *5 cartas* vence.',
     '▢ • Ações: */check*, */cobrir*, */poker apostar valor*, */allin*, */out*.',
     '▢ • Quando todos agem, a mesa avança automaticamente.',
+    '▢ • Se o jogador não agir em *2 minutos*, recebe */out* automático.',
     '▢',
     '▢ *Combinações da mais forte para a mais fraca:*',
     '▢ 1. *Straight Flush* — sequência do mesmo naipe.',
@@ -203,18 +250,35 @@ function blackjackRules() {
 
 function trucoRules() {
   return [
-    '╭━━⪩ 🃏 *REGRAS DO TRUCO PAULISTA LIMPO* ⪨━━',
+    '╭━━⪩ 🃏 *REGRAS DO TRUCO PAULISTA* ⪨━━',
     '▢',
-    '▢ • Crie a mesa com */truco criar valor*.',
-    '▢ • Jogo pode ter *2 jogadores* ou *4 jogadores*.',
-    '▢ • Com 4 jogadores, o bot sorteia as duplas.',
-    '▢ • Baralho limpo: sem 8, 9, 10 e coringas.',
-    '▢ • O bot entrega *3 cartas* no privado.',
+    '▢ • Truco sujo: */truco criar valor*.',
+    '▢ • Truco limpo: */Ltruco criar valor*.',
+    '▢ • Cada jogador paga o valor de entrada.',
+    '▢ • Pode iniciar com *2 jogadores* ou *4 jogadores*.',
+    '▢ • Em 4 jogadores, o bot sorteia quem será J1, J2, J3 e J4.',
+    '▢ • Depois do sorteio: Time 1 = J1 + J2 | Time 2 = J3 + J4.',
+    '▢ • Ordem da mesa em 4 jogadores: J1 → J3 → J2 → J4.',
+    '▢ • Primeira mão: J1 dá as cartas e J3 começa.',
+    '▢ • Próxima mão: J3 dá as cartas e J2 começa, seguindo a rotação.',
+    '▢ • /truco usa baralho sujo: 3,2,A,K,J,Q,7,6,5,4.',
+    '▢ • /Ltruco usa baralho limpo: 3,2,A,K,J,Q.',
+    '▢ • /Ltruco também usa vira e manilha, seguindo a rotação do baralho limpo.',
+    '▢ • Cada jogador recebe *3 cartas* no privado.',
+    '▢ • Se estiver *11 x 11*, a mão é *às cegas*: o bot não envia cartas no privado.',
+    '▢ • Na mão às cegas, use apenas */truco jogar 1*, */truco jogar 2* ou */truco jogar 3* sem saber as cartas.',
     '▢ • O bot mostra a *vira* e a *manilha* no grupo.',
     '▢ • Use */truco jogar 1* para jogar a carta 1 da sua mão.',
-    '▢ • A mão pode valer 1, 3, 6, 9 ou 12 pontos.',
-    '▢ • Comandos: */truco truco*, */truco seis*, */truco nove*, */truco doze*.',
-    '▢ • Vence quem chegar a *12 pontos* primeiro.',
+    '▢ • Só pode pedir aumento na sua vez.',
+    '▢ • Aumentos: */3*, */6*, */9* e */12*.',
+    '▢ • Depois que um time pedir aumento, somente o outro time pode pedir o próximo aumento.',
+    '▢   Exemplo: Time 1 pediu */3*; só o Time 2 pode pedir */6* depois.',
+    '▢ • O jogador marcado precisa responder com */aceitar* ou */recusar*.',
+    '▢ • Se o jogador não agir em *3 minutos*, o bot joga a primeira carta da mão.',
+    '▢ • Se houver pedido de aumento pendente e o jogador não responder em *3 minutos*, o bot recusa automaticamente.',
+    '▢ • Se recusar, o time que pediu ganha o valor anterior da mão.',
+    '▢ • Vence a mão quem ganhar 2 rodadas; empates seguem regra simplificada do truco.',
+    '▢ • Vence a partida o time que fizer *12 pontos* primeiro.',
     '▢ • Em 1v1, o vencedor recebe o prêmio inteiro.',
     '▢ • Em 2v2, o prêmio é dividido entre a dupla vencedora.',
     '╰━━─「🃏」─━━',
@@ -225,7 +289,7 @@ function regrasCartas(argsText = '') {
   const type = normalizeAction(firstToken(argsText));
   if (['poker', 'poquer', 'pôker'].includes(type)) return { ok: true, message: pokerRules() };
   if (['blackjack', 'black', 'bj', '21'].includes(type)) return { ok: true, message: blackjackRules() };
-  if (['truco'].includes(type)) return { ok: true, message: trucoRules() };
+  if (['truco', 'ltruco', 'limpo'].includes(type)) return { ok: true, message: trucoRules() };
 
   return {
     ok: true,
@@ -625,6 +689,7 @@ function formatPokerTable(game) {
     `▢ • Jogadores ativos: *${activePlayers}/${game.players.length}*`,
     `▢ • Etapa: *${game.stage}*`,
     current ? `▢ • Vez de: ${mentionPlayer(current)}` : null,
+    current && game.turnDeadlineAt ? `▢ • Tempo restante: *${formatRemainingTime(game.turnDeadlineAt)}*` : null,
     '▢',
     `▢ • Mesa: ${game.community.length ? cardsText(game.community) : 'Nenhuma carta aberta ainda.'}`,
     '▢',
@@ -781,6 +846,7 @@ function finishPokerBySingleWinner(chatId, game, winner, reason) {
   const { payouts, details } = resolvePokerSidePots(game, evaluated);
   const payout = payouts.get(winner.id) || 0;
   if (payout > 0) addZenies(winner.id, payout);
+  clearTurnTimer(game);
   pokerGames.delete(chatId);
 
   return {
@@ -801,6 +867,7 @@ function showdownPoker(chatId, game) {
   const evaluated = evaluatePokerContenders(game);
   const { payouts, details } = resolvePokerSidePots(game, evaluated);
   for (const [playerId, amount] of payouts.entries()) addZenies(playerId, amount);
+  clearTurnTimer(game);
   pokerGames.delete(chatId);
 
   const winners = [...payouts.entries()]
@@ -880,6 +947,47 @@ function finishPokerAction(chatId, game, actionMessage) {
   };
 }
 
+function schedulePokerTurnTimeout(client, chatId, game) {
+  clearTurnTimer(game);
+
+  if (!client || !game || game.status !== 'playing') return;
+  if (pokerGames.get(chatId) !== game) return;
+
+  const current = getPokerCurrentPlayer(game);
+  if (!current) return;
+
+  const version = Number(game.turnTimerVersion || 0) + 1;
+  game.turnTimerVersion = version;
+  game.turnDeadlineAt = Date.now() + POKER_TURN_TIMEOUT_MS;
+
+  game.turnTimer = setManagedTimeout(async () => {
+    const activeGame = pokerGames.get(chatId);
+    if (activeGame !== game) return;
+    if (game.turnTimerVersion !== version || game.status !== 'playing') return;
+
+    const currentNow = getPokerCurrentPlayer(game);
+    if (!currentNow || currentNow.id !== current.id || currentNow.folded || currentNow.allIn) return;
+
+    currentNow.folded = true;
+    currentNow.acted = true;
+
+    const result = finishPokerAction(
+      chatId,
+      game,
+      `⏳ ${mentionPlayer(currentNow)} não agiu em *2 minutos* e recebeu */out* automático.`
+    );
+
+    await sendGameResult(client, game.chatId, result);
+    schedulePokerTurnTimeout(client, chatId, game);
+  }, POKER_TURN_TIMEOUT_MS);
+}
+
+function finishPokerActionWithTimer(client, chatId, game, actionMessage) {
+  const result = finishPokerAction(chatId, game, actionMessage);
+  schedulePokerTurnTimeout(client, chatId, game);
+  return result;
+}
+
 async function sendPokerHands(client, game) {
   const failed = [];
   for (const player of game.players) {
@@ -890,7 +998,7 @@ async function sendPokerHands(client, game) {
       `Suas cartas: *${cardsText(player.hand)}*`,
       '',
       'Não mostre suas cartas no grupo.',
-    ].join('\n'));
+    ].filter(Boolean).join('\n'));
     if (!sent) failed.push(player.phone);
   }
   return failed;
@@ -910,6 +1018,7 @@ function pokerHelp() {
     '▢ • */poker apostar valor* — Aposta/aumenta a rodada.',
     '▢ • */allin* ou */poker allin* — Vai all-in.',
     '▢ • */out* ou */poker out* — Desiste da mão.',
+    '▢ • Sem agir por *2 minutos* = */out* automático.',
     '▢',
     '▢ • Informações:',
     '▢ • */pote* ou */poker pote* — Mostra pote, mesa e vez.',
@@ -993,6 +1102,7 @@ async function poker(message, argsText = '', client) {
     }
     const failed = await sendPokerHands(client, game);
     const current = getPokerCurrentPlayer(game);
+    schedulePokerTurnTimeout(client, chatId, game);
     return {
       ok: true,
       message: ['♠️ *Poker iniciado!*', '', 'As cartas foram enviadas no privado de cada jogador.', failed.length ? `⚠️ Não consegui enviar privado para: ${failed.map((phone) => `@${phone}`).join(', ')}` : null, '', current ? `🎯 Primeira vez: ${mentionPlayer(current)}.` : null, '', formatPokerTable(game)].filter(Boolean).join('\n'),
@@ -1029,14 +1139,14 @@ async function poker(message, argsText = '', client) {
   if (['check', 'passar'].includes(action)) {
     if (pokerPlayer.streetBet !== game.currentBet) return { ok: false, message: `Você precisa cobrir *${money(game.currentBet - pokerPlayer.streetBet)} Zenies* ou dar out.` };
     pokerPlayer.acted = true;
-    return { ok: true, ...finishPokerAction(chatId, game, `✅ ${mentionPlayer(pokerPlayer)} deu *check*.`) };
+    return { ok: true, ...finishPokerActionWithTimer(client, chatId, game, `✅ ${mentionPlayer(pokerPlayer)} deu *check*.`) };
   }
 
   if (['cobrir', 'call', 'pagar'].includes(action)) {
     const amount = game.currentBet - pokerPlayer.streetBet;
     if (amount <= 0) {
       pokerPlayer.acted = true;
-      return { ok: true, ...finishPokerAction(chatId, game, `✅ ${mentionPlayer(pokerPlayer)} deu *check*.`) };
+      return { ok: true, ...finishPokerActionWithTimer(client, chatId, game, `✅ ${mentionPlayer(pokerPlayer)} deu *check*.`) };
     }
     const fresh = getFreshPlayer(player);
     if (Number(fresh.zenies || 0) < amount) return { ok: false, message: `Saldo insuficiente para cobrir. Falta cobrir *${money(amount)} Zenies*. Use */allin* ou */out*.` };
@@ -1045,7 +1155,7 @@ async function poker(message, argsText = '', client) {
     pokerPlayer.streetBet += amount;
     pokerPlayer.acted = true;
     game.pot += amount;
-    return { ok: true, ...finishPokerAction(chatId, game, `💰 ${mentionPlayer(pokerPlayer)} cobriu *${money(amount)} Zenies*.`) };
+    return { ok: true, ...finishPokerActionWithTimer(client, chatId, game, `💰 ${mentionPlayer(pokerPlayer)} cobriu *${money(amount)} Zenies*.`) };
   }
 
   if (['apostar', 'aumentar', 'raise'].includes(action)) {
@@ -1062,7 +1172,7 @@ async function poker(message, argsText = '', client) {
       game.currentBet = pokerPlayer.streetBet;
       for (const other of game.players) if (!other.folded && !other.allIn && other.id !== pokerPlayer.id) other.acted = false;
     }
-    return { ok: true, ...finishPokerAction(chatId, game, `💰 ${mentionPlayer(pokerPlayer)} apostou/aumentou *${money(amount)} Zenies*.`) };
+    return { ok: true, ...finishPokerActionWithTimer(client, chatId, game, `💰 ${mentionPlayer(pokerPlayer)} apostou/aumentou *${money(amount)} Zenies*.`) };
   }
 
   if (['allin', 'all-in', 'all', 'allwin', 'all win'].includes(action)) {
@@ -1079,17 +1189,18 @@ async function poker(message, argsText = '', client) {
       game.currentBet = pokerPlayer.streetBet;
       for (const other of game.players) if (!other.folded && !other.allIn && other.id !== pokerPlayer.id) other.acted = false;
     }
-    return { ok: true, ...finishPokerAction(chatId, game, `🔥 ${mentionPlayer(pokerPlayer)} foi *ALL-IN* com *${money(amount)} Zenies*!`) };
+    return { ok: true, ...finishPokerActionWithTimer(client, chatId, game, `🔥 ${mentionPlayer(pokerPlayer)} foi *ALL-IN* com *${money(amount)} Zenies*!`) };
   }
 
   if (['desistir', 'fold', 'correr', 'out', 'sair'].includes(action)) {
     pokerPlayer.folded = true;
     pokerPlayer.acted = true;
-    return { ok: true, ...finishPokerAction(chatId, game, `🚪 ${mentionPlayer(pokerPlayer)} deu *out* e saiu da mão.`) };
+    return { ok: true, ...finishPokerActionWithTimer(client, chatId, game, `🚪 ${mentionPlayer(pokerPlayer)} deu *out* e saiu da mão.`) };
   }
 
   if (['cancelar'].includes(action)) {
     if (player.id !== game.createdBy) return { ok: false, message: 'Apenas quem criou a mesa pode cancelar.' };
+    clearTurnTimer(game);
     pokerGames.delete(chatId);
     return { ok: true, message: 'Mesa de Poker cancelada. Valores já apostados não são devolvidos.' };
   }
@@ -1098,7 +1209,7 @@ async function poker(message, argsText = '', client) {
 }
 
 // =========================
-// Truco Paulista limpo com aposta e pontuação até 12
+// Truco Paulista limpo — fluxo oficial com ordem, truco/6/9/12 e aceite/recusa
 // =========================
 
 function createTrucoPlayer(player) {
@@ -1108,6 +1219,7 @@ function createTrucoPlayer(player) {
     phone: player.phone,
     hand: [],
     team: null,
+    label: null,
   };
 }
 
@@ -1115,79 +1227,168 @@ function findTrucoPlayer(game, playerId) {
   return game.players.find((item) => item.id === playerId);
 }
 
-function nextTrucoRank(rank) {
-  const index = TRUCO_RANKS_LOW_TO_HIGH.indexOf(rank);
-  if (index === -1) return '4';
-  return TRUCO_RANKS_LOW_TO_HIGH[(index + 1) % TRUCO_RANKS_LOW_TO_HIGH.length];
+function nextTrucoRank(rank, ranksLowToHigh = TRUCO_RANKS_LOW_TO_HIGH) {
+  const index = ranksLowToHigh.indexOf(rank);
+  if (index === -1) return ranksLowToHigh[0] || '4';
+  return ranksLowToHigh[(index + 1) % ranksLowToHigh.length];
 }
 
-function trucoCardPower(card, manilhaRank) {
+function getTrucoRanksLowToHigh(game) {
+  return game?.isClean ? TRUCO_CLEAN_RANKS_LOW_TO_HIGH : TRUCO_RANKS_LOW_TO_HIGH;
+}
+
+function trucoCardPower(card, manilhaRank, game = null) {
   if (card.rank === manilhaRank) return 100 + Number(card.trucoPower || 0);
-  return TRUCO_RANKS_LOW_TO_HIGH.indexOf(card.rank) + 1;
+  const ranksLowToHigh = getTrucoRanksLowToHigh(game);
+  return ranksLowToHigh.indexOf(card.rank) + 1;
 }
 
 function formatTrucoHand(player) {
   return player.hand.map((card, index) => `${index + 1}) ${cardText(card)}`).join('\n');
 }
 
-function assignTrucoTeams(game) {
-  if (game.players.length === 2) {
-    game.players[0].team = 1;
-    game.players[1].team = 2;
+function setupTrucoTeamsAndOrder(game) {
+  // Os lugares/times são sorteados no início da partida.
+  // Depois do sorteio, o fluxo fixo é preservado:
+  // Time 1: J1 + J2 | Time 2: J3 + J4
+  // Ordem da mesa: J1 → J3 → J2 → J4.
+  const players = shuffle(game.players);
+  game.players = players;
+
+  if (players.length === 2) {
+    players[0].team = 1;
+    players[0].label = 'J1';
+    players[1].team = 2;
+    players[1].label = 'J2';
+    game.turnOrder = [players[0].id, players[1].id];
     return;
   }
-  const shuffled = shuffle(game.players);
-  shuffled[0].team = 1;
-  shuffled[1].team = 2;
-  shuffled[2].team = 1;
-  shuffled[3].team = 2;
+
+  players[0].team = 1;
+  players[0].label = 'J1';
+  players[1].team = 1;
+  players[1].label = 'J2';
+  players[2].team = 2;
+  players[2].label = 'J3';
+  players[3].team = 2;
+  players[3].label = 'J4';
+  game.turnOrder = [players[0].id, players[2].id, players[1].id, players[3].id];
+}
+
+function getTrucoPlayerById(game, playerId) {
+  return game.players.find((player) => player.id === playerId) || null;
 }
 
 function currentTrucoPlayer(game) {
-  return game.players[game.currentTurnIndex] || null;
+  if (!Array.isArray(game.turnOrder) || game.turnOrder.length === 0) return null;
+  return getTrucoPlayerById(game, game.turnOrder[game.currentTurnSeatIndex]);
 }
 
-function nextTrucoTurn(game) {
-  game.currentTurnIndex = (game.currentTurnIndex + 1) % game.players.length;
-  return currentTrucoPlayer(game);
+function trucoSeatIndexOf(game, playerId) {
+  return Array.isArray(game.turnOrder) ? game.turnOrder.indexOf(playerId) : -1;
+}
+
+function trucoPlayerAtSeat(game, seatIndex) {
+  if (!Array.isArray(game.turnOrder) || game.turnOrder.length === 0) return null;
+  const normalized = ((seatIndex % game.turnOrder.length) + game.turnOrder.length) % game.turnOrder.length;
+  return getTrucoPlayerById(game, game.turnOrder[normalized]);
+}
+
+function nextTrucoSeatIndex(game, seatIndex) {
+  return (seatIndex + 1) % game.turnOrder.length;
+}
+
+function nextOpponentAfterSeat(game, requesterSeatIndex) {
+  const requester = trucoPlayerAtSeat(game, requesterSeatIndex);
+  if (!requester) return null;
+
+  for (let offset = 1; offset <= game.turnOrder.length; offset += 1) {
+    const player = trucoPlayerAtSeat(game, requesterSeatIndex + offset);
+    if (player && player.team !== requester.team) return player;
+  }
+
+  return null;
+}
+
+function advanceTrucoTurn(game) {
+  if (!Array.isArray(game.turnOrder) || game.turnOrder.length === 0) return null;
+
+  for (let offset = 1; offset <= game.turnOrder.length; offset += 1) {
+    const nextIndex = (game.currentTurnSeatIndex + offset) % game.turnOrder.length;
+    const nextPlayer = trucoPlayerAtSeat(game, nextIndex);
+    const alreadyPlayed = game.roundCards.some((item) => item.player.id === nextPlayer.id);
+
+    if (!alreadyPlayed) {
+      game.currentTurnSeatIndex = nextIndex;
+      return nextPlayer;
+    }
+  }
+
+  return null;
+}
+
+function splitByTeam(game, teamId) {
+  return game.players.filter((player) => player.team === teamId);
+}
+
+function formatTrucoPlayer(player) {
+  return `${player.label || 'J?'} ${mentionPlayer(player)}`;
 }
 
 function formatTrucoTable(game) {
   const current = currentTrucoPlayer(game);
+  const dealer = trucoPlayerAtSeat(game, game.dealerSeatIndex || 0);
+  const pending = game.pendingRaise;
+
   return [
-    '╭━━⪩ 🃏 *TRUCO PAULISTA LIMPO* ⪨━━',
+    `╭━━⪩ 🃏 *${game.isClean ? 'LTRUCO LIMPO' : 'TRUCO PAULISTA SUJO'}* ⪨━━`,
     '▢',
     `▢ • Entrada: *${money(game.buyIn)} Zenies*`,
     `▢ • Pote: *${money(game.pot)} Zenies*`,
     `▢ • Placar: Time 1 *${game.score[1]}* x *${game.score[2]}* Time 2`,
+    game.blindHand ? '▢ • Mão: *às cegas* — cartas não foram enviadas no privado.' : null,
     `▢ • Valor da mão: *${game.handValue}*`,
     game.vira ? `▢ • Vira: *${cardText(game.vira)}*` : '▢ • Vira: ainda não saiu.',
     game.manilhaRank ? `▢ • Manilha: *${game.manilhaRank}*` : '▢ • Manilha: ainda não definida.',
-    current ? `▢ • Vez de: ${mentionPlayer(current)} — Time ${current.team}` : null,
+    dealer ? `▢ • Quem deu as cartas: ${formatTrucoPlayer(dealer)}` : null,
+    current ? `▢ • Vez de: ${formatTrucoPlayer(current)} — Time ${current.team}` : null,
+    pending ? `▢ • Pedido pendente: *${pending.requestedValue}* — ${formatTrucoPlayer(pending.responder)} deve usar */aceitar* ou */recusar*.` : null,
+    game.turnDeadlineAt ? `▢ • Tempo restante: *${formatRemainingTime(game.turnDeadlineAt)}*` : null,
     '▢',
     '▢ • Times:',
-    `▢   Time 1: ${splitByTeam(game, 1).map(mentionPlayer).join(' + ')}`,
-    `▢   Time 2: ${splitByTeam(game, 2).map(mentionPlayer).join(' + ')}`,
+    `▢   Time 1: ${splitByTeam(game, 1).map(formatTrucoPlayer).join(' + ')}`,
+    `▢   Time 2: ${splitByTeam(game, 2).map(formatTrucoPlayer).join(' + ')}`,
     game.roundCards?.length ? '▢' : null,
-    game.roundCards?.length ? `▢ • Cartas na mesa: ${game.roundCards.map((item) => `${mentionPlayer(item.player)}: ${cardText(item.card)}`).join(' | ')}` : null,
+    game.roundCards?.length ? `▢ • Cartas na mesa: ${game.roundCards.map((item) => `${formatTrucoPlayer(item.player)}: ${cardText(item.card)}`).join(' | ')}` : null,
+    game.tricks?.length ? '▢' : null,
+    game.tricks?.length ? `▢ • Rodadas da mão: ${game.tricks.map((trick, index) => trick.winnerTeam ? `${index + 1}ª Time ${trick.winnerTeam}` : `${index + 1}ª Empate`).join(' | ')}` : null,
     '╰━━─「🃏」─━━',
   ].filter(Boolean).join('\n');
 }
 
 async function sendTrucoHands(client, game) {
   const failed = [];
+
+  if (game.blindHand) {
+    return failed;
+  }
+
   for (const player of game.players) {
     const sent = await sendPrivate(client, player.whatsapp_id, [
       '🃏 *Suas cartas no Truco DragonVerse*',
       '',
+      `Jogador: *${player.label || 'J?'}*`,
       `Time: *${player.team}*`,
+      game.isClean ? 'Modo: *Ltruco limpo — baralho 3, 2, A, K, J, Q*' : 'Modo: *Truco sujo*',
       `Vira: *${cardText(game.vira)}*`,
       `Manilha: *${game.manilhaRank}*`,
       '',
       formatTrucoHand(player),
       '',
-      'Use no grupo: */truco jogar 1*',
-    ].join('\n'));
+      `Use no grupo: */${game.commandName || 'truco'} jogar 1*`,
+      'Para pedir aumento na sua vez: */3*, */6*, */9* ou */12*',
+      'Tempo de ação: *3 minutos*. Se não agir, o bot joga sua primeira carta.',
+    ].filter(Boolean).join('\n'));
     if (!sent) failed.push(player.phone);
   }
   return failed;
@@ -1201,95 +1402,315 @@ function nextTrucoRaise(current) {
   return 12;
 }
 
-async function dealNewTrucoHand(game, client, starterIndex = null) {
-  game.deck = createDeck(TRUCO_DECK_RANKS);
+function requestedTrucoValue(action) {
+  if (['truco', '3'].includes(action)) return 3;
+  if (['seis', '6'].includes(action)) return 6;
+  if (['nove', '9'].includes(action)) return 9;
+  if (['doze', '12'].includes(action)) return 12;
+  return null;
+}
+
+async function dealNewTrucoHand(game, client) {
+  game.deck = createDeck(game.deckRanks || TRUCO_DECK_RANKS);
   for (const player of game.players) player.hand = draw(game.deck, 3);
   game.vira = draw(game.deck, 1)[0];
-  game.manilhaRank = nextTrucoRank(game.vira.rank);
+  game.manilhaRank = nextTrucoRank(game.vira.rank, getTrucoRanksLowToHigh(game));
   game.handValue = 1;
   game.roundCards = [];
-  game.roundWins = { 1: 0, 2: 0 };
+  game.tricks = [];
   game.roundNumber = 1;
-  if (starterIndex !== null) game.currentTurnIndex = starterIndex;
+  game.pendingRaise = null;
+  game.lastRaiseTeam = null;
+  game.blindHand = Number(game.score?.[1] || 0) === 11 && Number(game.score?.[2] || 0) === 11;
+
+  const dealer = trucoPlayerAtSeat(game, game.dealerSeatIndex || 0);
+  game.currentTurnSeatIndex = nextTrucoSeatIndex(game, game.dealerSeatIndex || 0);
+  game.trickStarterSeatIndex = game.currentTurnSeatIndex;
+
+  const starter = currentTrucoPlayer(game);
   const failed = await sendTrucoHands(client, game);
-  return failed;
+
+  return { failed, dealer, starter };
+}
+
+function rotateTrucoDealer(game) {
+  game.dealerSeatIndex = nextTrucoSeatIndex(game, game.dealerSeatIndex || 0);
 }
 
 function payTrucoWinners(chatId, game, winningTeam) {
   const winners = splitByTeam(game, winningTeam);
   const prizeEach = Math.floor(game.pot / winners.length);
   for (const player of winners) addZenies(player.id, prizeEach);
+  clearTurnTimer(game);
   trucoGames.delete(chatId);
+
   return {
     ok: true,
     message: [
       '🏆 *Truco encerrado!*',
       '',
       `Time ${winningTeam} venceu por *${game.score[winningTeam]}* pontos.`,
-      `Vencedores: ${winners.map(mentionPlayer).join(' + ')}`,
+      `Vencedores: ${winners.map(formatTrucoPlayer).join(' + ')}`,
       `Prêmio para cada um: *${money(prizeEach)} Zenies*`,
     ].join('\n'),
     mentions: mentionIds(game.players),
   };
 }
 
-async function finishTrucoRound(chatId, game, client) {
-  const sorted = [...game.roundCards].sort((a, b) => trucoCardPower(b.card, game.manilhaRank) - trucoCardPower(a.card, game.manilhaRank));
-  const winner = sorted[0];
-  game.roundWins[winner.player.team] = (game.roundWins[winner.player.team] || 0) + 1;
-  const wonRounds = Number(game.roundWins[winner.player.team] || 0);
-  const baseLines = [
-    '🏁 *Rodada do Truco encerrada!*',
-    '',
-    `Cartas: ${game.roundCards.map((item) => `${mentionPlayer(item.player)} ${cardText(item.card)}`).join(' | ')}`,
-    `Vencedor da rodada: ${mentionPlayer(winner.player)} — Time ${winner.player.team}`,
-  ];
+function getTrucoTrickResult(game) {
+  const maxPower = Math.max(...game.roundCards.map((item) => trucoCardPower(item.card, game.manilhaRank, game)));
+  const topCards = game.roundCards.filter((item) => trucoCardPower(item.card, game.manilhaRank, game) === maxPower);
+  const topTeams = [...new Set(topCards.map((item) => item.player.team))];
 
-  game.roundCards = [];
-  game.roundNumber += 1;
-  game.currentTurnIndex = game.players.indexOf(winner.player);
-
-  if (wonRounds >= 2 || game.roundNumber > 3) {
-    game.score[winner.player.team] += game.handValue;
-    baseLines.push('', `🟢 Time ${winner.player.team} venceu a mão e ganhou *${game.handValue}* ponto(s).`);
-    baseLines.push(`Placar: Time 1 *${game.score[1]}* x *${game.score[2]}* Time 2`);
-
-    if (game.score[winner.player.team] >= TRUCO_TARGET_POINTS) {
-      const paid = payTrucoWinners(chatId, game, winner.player.team);
-      return { ok: true, message: [baseLines.join('\n'), '', paid.message].join('\n'), mentions: paid.mentions };
-    }
-
-    const failed = await dealNewTrucoHand(game, client, game.currentTurnIndex);
-    const current = currentTrucoPlayer(game);
+  if (topTeams.length === 1) {
     return {
-      ok: true,
-      message: [
-        baseLines.join('\n'),
-        '',
-        '🔄 Nova mão distribuída automaticamente.',
-        failed.length ? `⚠️ Não consegui enviar privado para: ${failed.map((phone) => `@${phone}`).join(', ')}` : null,
-        '',
-        `🎯 Vez de ${mentionPlayer(current)}.`,
-        '',
-        formatTrucoTable(game),
-      ].filter(Boolean).join('\n'),
-      mentions: mentionIds(game.players),
+      winnerTeam: topTeams[0],
+      winnerPlayer: topCards[0].player,
+      tied: false,
     };
   }
 
-  const current = currentTrucoPlayer(game);
+  return {
+    winnerTeam: null,
+    winnerPlayer: null,
+    tied: true,
+  };
+}
+
+function determineTrucoHandWinner(game) {
+  const tricks = game.tricks;
+  const wins = { 1: 0, 2: 0 };
+  for (const trick of tricks) {
+    if (trick.winnerTeam) wins[trick.winnerTeam] += 1;
+  }
+
+  if (wins[1] >= 2) return 1;
+  if (wins[2] >= 2) return 2;
+
+  if (tricks.length === 2) {
+    // Se uma equipe ganhou a primeira e a segunda empatou, a primeira vencedora leva a mão.
+    if (tricks[0].winnerTeam && !tricks[1].winnerTeam) return tricks[0].winnerTeam;
+    // Se a primeira empatou e alguém ganhou a segunda, essa equipe leva a mão.
+    if (!tricks[0].winnerTeam && tricks[1].winnerTeam) return tricks[1].winnerTeam;
+  }
+
+  if (tricks.length < 3) return null;
+
+  if (wins[1] > wins[2]) return 1;
+  if (wins[2] > wins[1]) return 2;
+
+  // Em empate completo, a equipe do primeiro jogador da mão fica com a mão.
+  const starter = trucoPlayerAtSeat(game, game.handStarterSeatIndex || 0);
+  return starter?.team || 1;
+}
+
+async function awardTrucoHandAndMaybeContinue(chatId, game, client, winningTeam, reasonLines = []) {
+  game.score[winningTeam] += game.handValue;
+
+  const baseLines = [
+    ...reasonLines,
+    `🟢 Time ${winningTeam} ganhou *${game.handValue}* ponto(s).`,
+    `Placar: Time 1 *${game.score[1]}* x *${game.score[2]}* Time 2`,
+  ];
+
+  if (game.score[winningTeam] >= TRUCO_TARGET_POINTS) {
+    const paid = payTrucoWinners(chatId, game, winningTeam);
+    return { ok: true, message: [baseLines.join('\n'), '', paid.message].join('\n'), mentions: paid.mentions };
+  }
+
+  rotateTrucoDealer(game);
+  const { failed, dealer, starter } = await dealNewTrucoHand(game, client);
+
   return {
     ok: true,
-    message: [baseLines.join('\n'), '', `🎯 Próxima rodada. Vez de ${mentionPlayer(current)}.`, '', formatTrucoTable(game)].join('\n'),
+    message: [
+      baseLines.join('\n'),
+      '',
+      game.blindHand ? '🙈 *Mão às cegas!* Placar 11 x 11. O bot não enviou as cartas no privado.' : '🔄 Nova mão distribuída automaticamente.',
+      `${formatTrucoPlayer(dealer)} deu as cartas, então ${formatTrucoPlayer(starter)} começa.`,
+      game.blindHand ? `Usem */${game.commandName || 'truco'} jogar 1*, */${game.commandName || 'truco'} jogar 2* ou */${game.commandName || 'truco'} jogar 3* sem saber as cartas.` : null,
+      !game.blindHand && failed.length ? `⚠️ Não consegui enviar privado para: ${failed.map((phone) => `@${phone}`).join(', ')}` : null,
+      '',
+      formatTrucoTable(game),
+    ].filter(Boolean).join('\n'),
     mentions: mentionIds(game.players),
   };
 }
 
-async function truco(message, argsText = '', client) {
+async function finishTrucoTrick(chatId, game, client) {
+  const result = getTrucoTrickResult(game);
+  const trickCards = [...game.roundCards];
+
+  game.tricks.push({
+    winnerTeam: result.winnerTeam,
+    winnerPlayerId: result.winnerPlayer?.id || null,
+    cards: trickCards,
+  });
+
+  const lines = [
+    '🏁 *Rodada do Truco encerrada!*',
+    '',
+    `Cartas: ${trickCards.map((item) => `${formatTrucoPlayer(item.player)} ${cardText(item.card)}`).join(' | ')}`,
+    result.winnerTeam
+      ? `Vencedor da rodada: ${formatTrucoPlayer(result.winnerPlayer)} — Time ${result.winnerTeam}`
+      : 'Rodada empatada. Ninguém levou essa rodada.',
+  ];
+
+  game.roundCards = [];
+  game.roundNumber += 1;
+
+  const handWinner = determineTrucoHandWinner(game);
+  if (handWinner) {
+    return awardTrucoHandAndMaybeContinue(chatId, game, client, handWinner, lines);
+  }
+
+  if (result.winnerPlayer) {
+    game.currentTurnSeatIndex = trucoSeatIndexOf(game, result.winnerPlayer.id);
+  } else {
+    game.currentTurnSeatIndex = game.trickStarterSeatIndex;
+  }
+  game.trickStarterSeatIndex = game.currentTurnSeatIndex;
+
+  const current = currentTrucoPlayer(game);
+  return {
+    ok: true,
+    message: [
+      lines.join('\n'),
+      '',
+      `🎯 Próxima rodada da mão. Vez de ${formatTrucoPlayer(current)}.`,
+      '',
+      formatTrucoTable(game),
+    ].join('\n'),
+    mentions: mentionIds(game.players),
+  };
+}
+
+function canAskRaise(game, trucoPlayer, requestedValue) {
+  const current = currentTrucoPlayer(game);
+  if (!current || current.id !== trucoPlayer.id) {
+    return { ok: false, message: `Você só pode pedir truco/aumento na sua vez. Agora é a vez de ${formatTrucoPlayer(current)}.` };
+  }
+
+  if (game.roundCards.some((item) => item.player.id === trucoPlayer.id)) {
+    return { ok: false, message: 'Você já jogou carta nesta rodada, então não pode pedir aumento agora.' };
+  }
+
+  if (game.pendingRaise) {
+    return { ok: false, message: `Já existe um pedido pendente. ${formatTrucoPlayer(game.pendingRaise.responder)} precisa usar */aceitar* ou */recusar*.` };
+  }
+
+  const expected = nextTrucoRaise(game.handValue);
+  if (requestedValue !== expected) {
+    return { ok: false, message: `A mão está valendo *${game.handValue}*. O próximo aumento correto é */${expected}*.` };
+  }
+
+  if (game.handValue >= 12) {
+    return { ok: false, message: 'A mão já está valendo 12, não dá para aumentar mais.' };
+  }
+
+  if (game.lastRaiseTeam && game.lastRaiseTeam === trucoPlayer.team) {
+    const otherTeam = trucoPlayer.team === 1 ? 2 : 1;
+    return {
+      ok: false,
+      message: `O Time ${trucoPlayer.team} pediu o último aumento. Agora somente o Time ${otherTeam} pode pedir */${requestedValue}*.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+function scheduleTrucoTurnTimeout(client, gameKey, game) {
+  clearTurnTimer(game);
+
+  if (!client || !game || game.status !== 'playing') return;
+  if (trucoGames.get(gameKey) !== game) return;
+
+  const pending = game.pendingRaise || null;
+  const actor = pending?.responder || currentTrucoPlayer(game);
+  if (!actor) return;
+
+  const version = Number(game.turnTimerVersion || 0) + 1;
+  game.turnTimerVersion = version;
+  game.turnDeadlineAt = Date.now() + TRUCO_TURN_TIMEOUT_MS;
+
+  game.turnTimer = setManagedTimeout(async () => {
+    const activeGame = trucoGames.get(gameKey);
+    if (activeGame !== game) return;
+    if (game.turnTimerVersion !== version || game.status !== 'playing') return;
+
+    let result = null;
+
+    if (game.pendingRaise) {
+      const responder = game.pendingRaise.responder;
+      if (!responder || responder.id !== actor.id) return;
+
+      const winnerTeam = game.pendingRaise.requester.team;
+      const previousValue = game.pendingRaise.previousValue;
+      game.pendingRaise = null;
+      game.handValue = previousValue;
+
+      result = await awardTrucoHandAndMaybeContinue(gameKey, game, client, winnerTeam, [
+        `⏳ ${formatTrucoPlayer(responder)} não respondeu em *3 minutos*.`,
+        `Pedido recusado automaticamente. Time ${winnerTeam} fica com a mão no valor anterior: *${previousValue}* ponto(s).`,
+      ]);
+    } else {
+      const current = currentTrucoPlayer(game);
+      if (!current || current.id !== actor.id) return;
+
+      if (!current.hand.length) {
+        const next = advanceTrucoTurn(game);
+        result = {
+          ok: true,
+          message: [
+            `⏳ ${formatTrucoPlayer(current)} não tinha cartas disponíveis para jogar.`,
+            next ? `🎯 Agora é a vez de ${formatTrucoPlayer(next)}.` : null,
+            '',
+            formatTrucoTable(game),
+          ].filter(Boolean).join('\n'),
+          mentions: mentionIds(game.players),
+        };
+      } else {
+        const [card] = current.hand.splice(0, 1);
+        game.roundCards.push({ player: current, card });
+
+        if (game.roundCards.length >= game.players.length) {
+          result = await finishTrucoTrick(gameKey, game, client);
+        } else {
+          const next = advanceTrucoTurn(game);
+          result = {
+            ok: true,
+            message: [
+              `⏳ ${formatTrucoPlayer(current)} não agiu em *3 minutos*.`,
+              `🃏 O bot jogou automaticamente a primeira carta da mão: *${cardText(card)}*.`,
+              '',
+              next ? `🎯 Agora é a vez de ${formatTrucoPlayer(next)}.` : null,
+              '',
+              `Cartas na mesa: ${game.roundCards.map((item) => `${formatTrucoPlayer(item.player)} ${cardText(item.card)}`).join(' | ')}`,
+            ].filter(Boolean).join('\n'),
+            mentions: mentionIds(game.players),
+          };
+        }
+      }
+    }
+
+    await sendGameResult(client, game.chatId, result);
+    scheduleTrucoTurnTimeout(client, gameKey, game);
+  }, TRUCO_TURN_TIMEOUT_MS);
+}
+
+function withTrucoTimeout(client, gameKey, game, result) {
+  scheduleTrucoTurnTimeout(client, gameKey, game);
+  return result;
+}
+
+async function truco(message, argsText = '', client, options = {}) {
   const player = getOrCreatePlayerFromMessage(message, { touch: true });
   const action = normalizeAction(firstToken(argsText));
   const rest = restAfterFirst(argsText);
-  const chatId = message.from;
+  const baseChatId = message.from;
+  const variant = options.clean ? 'limpo' : 'sujo';
+  const commandName = options.clean ? 'Ltruco' : 'truco';
+  const chatId = `${baseChatId}:${variant}`;
   let game = trucoGames.get(chatId);
 
   if (!action) return { ok: true, message: trucoRules() };
@@ -1303,32 +1724,51 @@ async function truco(message, argsText = '', client) {
     removeZenies(player.id, buyIn);
     const trucoPlayer = createTrucoPlayer(player);
     game = {
-      chatId,
+      chatId: baseChatId,
+      gameKey: chatId,
+      isClean: Boolean(options.clean),
+      deckRanks: options.clean ? TRUCO_CLEAN_DECK_RANKS : TRUCO_DECK_RANKS,
+      commandName,
       status: 'waiting',
       createdBy: player.id,
       buyIn,
       pot: buyIn,
       players: [trucoPlayer],
+      turnOrder: [],
       deck: [],
       vira: null,
       manilhaRank: null,
       handValue: 1,
       roundNumber: 1,
-      currentTurnIndex: 0,
+      dealerSeatIndex: 0,
+      currentTurnSeatIndex: 0,
+      trickStarterSeatIndex: 0,
+      handStarterSeatIndex: 0,
       roundCards: [],
-      roundWins: { 1: 0, 2: 0 },
+      tricks: [],
+      pendingRaise: null,
+      lastRaiseTeam: null,
+      blindHand: false,
       score: { 1: 0, 2: 0 },
     };
     trucoGames.set(chatId, game);
 
     return {
       ok: true,
-      message: [`🃏 *Mesa de Truco criada!*`, '', `Entrada: *${money(buyIn)} Zenies*`, `Criador: ${mentionPlayer(trucoPlayer)}`, '', 'Use */truco entrar* para participar. A mesa pode iniciar com 2 ou 4 jogadores.'].join('\n'),
+      message: [
+        '🃏 *Mesa de Truco criada!*',
+        '',
+        `Entrada: *${money(buyIn)} Zenies*`,
+        `Criador: ${mentionPlayer(trucoPlayer)}`,
+        '',
+        `Use */${commandName} entrar* para participar.`,
+        'A mesa pode iniciar com *2 ou 4 jogadores*.',
+      ].join('\n'),
       mentions: mentionIds(game.players),
     };
   }
 
-  if (!game) return { ok: false, message: 'Não existe mesa de Truco ativa. Use */truco criar valor*.' };
+  if (!game) return { ok: false, message: `Não existe mesa de ${options.clean ? 'Ltruco limpo' : 'Truco'} ativa. Use */${commandName} criar valor*.` };
 
   if (['entrar', 'join'].includes(action)) {
     if (game.status !== 'waiting') return { ok: false, message: 'Essa mesa já começou.' };
@@ -1348,14 +1788,34 @@ async function truco(message, argsText = '', client) {
     if (game.status !== 'waiting') return { ok: false, message: 'Essa mesa já foi iniciada.' };
     if (player.id !== game.createdBy) return { ok: false, message: 'Apenas quem criou a mesa pode iniciar.' };
     if (![2, 4].includes(game.players.length)) return { ok: false, message: 'Truco precisa iniciar com *2 ou 4 jogadores*.' };
+
     game.status = 'playing';
-    assignTrucoTeams(game);
-    game.currentTurnIndex = Math.floor(Math.random() * game.players.length);
-    const failed = await dealNewTrucoHand(game, client, game.currentTurnIndex);
-    const current = currentTrucoPlayer(game);
+    setupTrucoTeamsAndOrder(game);
+    game.dealerSeatIndex = 0;
+    const { failed, dealer, starter } = await dealNewTrucoHand(game, client);
+    game.handStarterSeatIndex = game.currentTurnSeatIndex;
+    scheduleTrucoTurnTimeout(client, chatId, game);
+
     return {
       ok: true,
-      message: ['🃏 *Truco iniciado!*', '', `Vira: *${cardText(game.vira)}*`, `Manilha: *${game.manilhaRank}*`, '', 'Times sorteados:', `Time 1: ${splitByTeam(game, 1).map(mentionPlayer).join(' + ')}`, `Time 2: ${splitByTeam(game, 2).map(mentionPlayer).join(' + ')}`, '', failed.length ? `⚠️ Não consegui enviar privado para: ${failed.map((phone) => `@${phone}`).join(', ')}` : null, `🎯 Primeira vez: ${mentionPlayer(current)}.`, '', formatTrucoTable(game)].filter(Boolean).join('\n'),
+      message: [
+        '🃏 *Truco iniciado!*',
+        '',
+        game.players.length === 4
+          ? 'Times sorteados: Time 1 = J1 + J2 | Time 2 = J3 + J4.'
+          : 'Partida 1v1 iniciada com posições sorteadas: J1 contra J2.',
+        `Ordem da mesa: ${game.turnOrder.map((id) => formatTrucoPlayer(getTrucoPlayerById(game, id))).join(' → ')}`,
+        '',
+        `${formatTrucoPlayer(dealer)} deu as cartas, então ${formatTrucoPlayer(starter)} começa.`,
+        game.isClean ? 'Modo limpo: baralho *3, 2, A, K, J, Q*.' : 'Modo sujo: baralho *3,2,A,K,J,Q,7,6,5,4*.',
+        `Vira: *${cardText(game.vira)}*`,
+        `Manilha: *${game.manilhaRank}*`,
+        game.blindHand ? '🙈 *Mão às cegas:* como o placar está 11 x 11, o bot não enviou as cartas no privado.' : null,
+        game.blindHand ? `Usem */${commandName} jogar 1*, */${commandName} jogar 2* ou */${commandName} jogar 3* sem saber as cartas.` : null,
+        !game.blindHand && failed.length ? `⚠️ Não consegui enviar privado para: ${failed.map((phone) => `@${phone}`).join(', ')}` : null,
+        '',
+        formatTrucoTable(game),
+      ].filter(Boolean).join('\n'),
       mentions: mentionIds(game.players),
     };
   }
@@ -1366,49 +1826,177 @@ async function truco(message, argsText = '', client) {
   if (['status', 'mesa'].includes(action)) return { ok: true, message: formatTrucoTable(game), mentions: mentionIds(game.players) };
 
   if (['cartas', 'mao', 'mão'].includes(action)) {
-    const sent = await sendPrivate(client, trucoPlayer.whatsapp_id, ['🃏 *Suas cartas no Truco DragonVerse*', '', `Time: *${trucoPlayer.team}*`, `Vira: *${cardText(game.vira)}*`, `Manilha: *${game.manilhaRank}*`, '', formatTrucoHand(trucoPlayer)].join('\n'));
+    if (game.blindHand) {
+      return {
+        ok: false,
+        message: [
+          '🙈 *Mão às cegas!*',
+          '',
+          'O placar está *11 x 11*, então o bot não mostra as cartas.',
+          `Use no grupo: */${game.commandName || 'truco'} jogar 1*, */${game.commandName || 'truco'} jogar 2* ou */${game.commandName || 'truco'} jogar 3*.`,
+        ].join('\n'),
+      };
+    }
+
+    const sent = await sendPrivate(client, trucoPlayer.whatsapp_id, [
+      '🃏 *Suas cartas no Truco DragonVerse*',
+      '',
+      `Jogador: *${trucoPlayer.label || 'J?'}*`,
+      `Time: *${trucoPlayer.team || '?'}*`,
+      game.isClean ? 'Modo: *Ltruco limpo — baralho 3, 2, A, K, J, Q*' : 'Modo: *Truco sujo*',
+      `Vira: *${cardText(game.vira)}*`,
+      `Manilha: *${game.manilhaRank}*`,
+      '',
+      formatTrucoHand(trucoPlayer),
+    ].filter(Boolean).join('\n'));
     return { ok: sent, message: sent ? '✅ Enviei suas cartas no privado.' : 'Não consegui enviar suas cartas no privado.' };
   }
 
   if (game.status !== 'playing') return { ok: false, message: 'A mesa ainda não começou.' };
 
-  if (['truco', 'seis', '6', 'nove', '9', 'doze', '12'].includes(action)) {
-    let requested = nextTrucoRaise(game.handValue);
-    if (['seis', '6'].includes(action)) requested = 6;
-    if (['nove', '9'].includes(action)) requested = 9;
-    if (['doze', '12'].includes(action)) requested = 12;
-    if (requested <= game.handValue) return { ok: false, message: `A mão já está valendo *${game.handValue}*.` };
-    game.handValue = requested;
-    return { ok: true, message: `🔥 ${mentionPlayer(trucoPlayer)} aumentou a mão para *${game.handValue}*!`, mentions: mentionIds(game.players) };
+  if (['aceitar', 'aceito'].includes(action)) {
+    if (!game.pendingRaise) return { ok: false, message: 'Não existe pedido de truco/aumento pendente.' };
+    if (game.pendingRaise.responder.id !== trucoPlayer.id) {
+      return { ok: false, message: `Só ${formatTrucoPlayer(game.pendingRaise.responder)} pode aceitar esse pedido.`, mentions: mentionIds(game.players) };
+    }
+
+    game.handValue = game.pendingRaise.requestedValue;
+    const requester = game.pendingRaise.requester;
+    game.lastRaiseTeam = requester.team;
+    game.pendingRaise = null;
+    scheduleTrucoTurnTimeout(client, chatId, game);
+
+    return {
+      ok: true,
+      message: [`✅ ${formatTrucoPlayer(trucoPlayer)} aceitou.`, `A mão agora vale *${game.handValue}* ponto(s).`, '', `🎯 Vez de ${formatTrucoPlayer(requester)} jogar.`].join('\n'),
+      mentions: mentionIds(game.players),
+    };
+  }
+
+  if (['recusar', 'recuso', 'correr'].includes(action)) {
+    if (!game.pendingRaise) return { ok: false, message: 'Não existe pedido de truco/aumento pendente.' };
+    if (game.pendingRaise.responder.id !== trucoPlayer.id) {
+      return { ok: false, message: `Só ${formatTrucoPlayer(game.pendingRaise.responder)} pode recusar esse pedido.`, mentions: mentionIds(game.players) };
+    }
+
+    const winnerTeam = game.pendingRaise.requester.team;
+    const previousValue = game.pendingRaise.previousValue;
+    game.pendingRaise = null;
+    game.handValue = previousValue;
+    const result = await awardTrucoHandAndMaybeContinue(chatId, game, client, winnerTeam, [
+      `🚪 ${formatTrucoPlayer(trucoPlayer)} recusou o pedido.`,
+      `Time ${winnerTeam} fica com a mão no valor anterior: *${previousValue}* ponto(s).`,
+    ]);
+    return withTrucoTimeout(client, chatId, game, result);
+  }
+
+  const raiseValue = requestedTrucoValue(action);
+  if (raiseValue) {
+    const validation = canAskRaise(game, trucoPlayer, raiseValue);
+    if (!validation.ok) return { ok: false, message: validation.message, mentions: mentionIds(game.players) };
+
+    const requesterSeatIndex = trucoSeatIndexOf(game, trucoPlayer.id);
+    const responder = nextOpponentAfterSeat(game, requesterSeatIndex);
+    game.pendingRaise = {
+      requestedValue: raiseValue,
+      previousValue: game.handValue,
+      requester: trucoPlayer,
+      responder,
+    };
+    scheduleTrucoTurnTimeout(client, chatId, game);
+
+    return {
+      ok: true,
+      message: [
+        `🔥 ${formatTrucoPlayer(trucoPlayer)} pediu */${raiseValue}*!`,
+        '',
+        `${formatTrucoPlayer(responder)}, use */aceitar* ou */recusar*.`,
+      ].join('\n'),
+      mentions: mentionIds(game.players),
+    };
   }
 
   if (['jogar', 'usar'].includes(action)) {
+    if (game.pendingRaise) {
+      return { ok: false, message: `Existe um pedido pendente. ${formatTrucoPlayer(game.pendingRaise.responder)} precisa usar */aceitar* ou */recusar*.`, mentions: mentionIds(game.players) };
+    }
+
     const current = currentTrucoPlayer(game);
-    if (current && current.id !== trucoPlayer.id) return { ok: false, message: `Ainda não é sua vez. Agora é a vez de ${mentionPlayer(current)}.`, mentions: mentionIds(game.players) };
+    if (current && current.id !== trucoPlayer.id) return { ok: false, message: `Ainda não é sua vez. Agora é a vez de ${formatTrucoPlayer(current)}.`, mentions: mentionIds(game.players) };
     const selected = Number(firstToken(rest));
-    if (!Number.isInteger(selected) || selected < 1 || selected > trucoPlayer.hand.length) return { ok: false, message: 'Use assim: */truco jogar 1*' };
+    if (!Number.isInteger(selected) || selected < 1 || selected > 3) return { ok: false, message: `Use assim: */${game.commandName || 'truco'} jogar 1*` };
+    if (!game.blindHand && selected > trucoPlayer.hand.length) return { ok: false, message: `Você só tem *${trucoPlayer.hand.length}* carta(s) na mão.` };
     if (game.roundCards.some((item) => item.player.id === player.id)) return { ok: false, message: 'Você já jogou uma carta nesta rodada.' };
 
-    const [card] = trucoPlayer.hand.splice(selected - 1, 1);
+    const cardIndex = trucoPlayer.hand[selected - 1] ? selected - 1 : 0;
+    const [card] = trucoPlayer.hand.splice(cardIndex, 1);
     game.roundCards.push({ player: trucoPlayer, card });
 
-    if (game.roundCards.length >= game.players.length) return finishTrucoRound(chatId, game, client);
+    if (game.roundCards.length >= game.players.length) {
+      const result = await finishTrucoTrick(chatId, game, client);
+      return withTrucoTimeout(client, chatId, game, result);
+    }
 
-    const next = nextTrucoTurn(game);
+    const next = advanceTrucoTurn(game);
+    scheduleTrucoTurnTimeout(client, chatId, game);
     return {
       ok: true,
-      message: [`🃏 ${mentionPlayer(trucoPlayer)} jogou *${cardText(card)}*.`, '', `🎯 Agora é a vez de ${mentionPlayer(next)}.`, '', `Cartas na mesa: ${game.roundCards.map((item) => `${mentionPlayer(item.player)} ${cardText(item.card)}`).join(' | ')}`].join('\n'),
+      message: [
+        `🃏 ${formatTrucoPlayer(trucoPlayer)} jogou *${cardText(card)}*.`,
+        '',
+        `🎯 Agora é a vez de ${formatTrucoPlayer(next)}.`,
+        '',
+        `Cartas na mesa: ${game.roundCards.map((item) => `${formatTrucoPlayer(item.player)} ${cardText(item.card)}`).join(' | ')}`,
+      ].join('\n'),
       mentions: mentionIds(game.players),
     };
   }
 
   if (['cancelar'].includes(action)) {
     if (player.id !== game.createdBy) return { ok: false, message: 'Apenas quem criou a mesa pode cancelar.' };
+    clearTurnTimer(game);
     trucoGames.delete(chatId);
     return { ok: true, message: 'Mesa de Truco cancelada. Apostas já colocadas não são devolvidas.' };
   }
 
   return { ok: false, message: 'Ação de Truco inválida. Use */regras truco*.' };
+}
+
+
+
+async function ltruco(message, argsText = '', client) {
+  return truco(message, argsText, client, { clean: true });
+}
+
+function removePlayerFromCardGames(playerId) {
+  const removed = { blackjack: 0, poker: 0, truco: 0 };
+
+  for (const [key, game] of blackjackGames.entries()) {
+    const hasPlayer = game?.player?.id === playerId || game?.players?.some((player) => player.id === playerId);
+    if (hasPlayer) {
+      clearTurnTimer(game);
+      blackjackGames.delete(key);
+      removed.blackjack += 1;
+    }
+  }
+
+  for (const [key, game] of pokerGames.entries()) {
+    if (game?.players?.some((player) => player.id === playerId)) {
+      clearTurnTimer(game);
+      pokerGames.delete(key);
+      removed.poker += 1;
+    }
+  }
+
+  for (const [key, game] of trucoGames.entries()) {
+    if (game?.players?.some((player) => player.id === playerId)) {
+      clearTurnTimer(game);
+      trucoGames.delete(key);
+      removed.truco += 1;
+    }
+  }
+
+  return removed;
 }
 
 function jogosStatus() {
@@ -1423,6 +2011,8 @@ module.exports = {
   blackjack,
   poker,
   truco,
+  ltruco,
   regrasCartas,
   jogosStatus,
+  removePlayerFromCardGames,
 };

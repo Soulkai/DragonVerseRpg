@@ -40,9 +40,10 @@ function getOrCreatePlayerByWhatsAppId(whatsappId, displayName = null, { touch =
       salario,
       last_active_at,
       last_salary_at,
+      last_deposit_at,
       last_deposit_interest_at
     )
-    VALUES (?, ?, ?, 1, ?, 0, 'L.I', 'Lutador Iniciante', NULL, 'Nenhum', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES (?, ?, ?, 1, ?, 0, 'L.I', 'Lutador Iniciante', NULL, 'Nenhum', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL, NULL)
     ON CONFLICT(whatsapp_id) DO UPDATE SET
       phone = excluded.phone,
       display_name = COALESCE(excluded.display_name, players.display_name),

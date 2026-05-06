@@ -1,4 +1,4 @@
-const { depositar, retirarPoupanca } = require('../services/economyService');
+const { depositar, retirarPoupanca, saldo } = require('../services/economyService');
 const { replyWithMentions } = require('../utils/reply');
 
 async function depositarCommand(message, command, client) {
@@ -11,4 +11,10 @@ async function retirarPoupancaCommand(message, command, client) {
   await replyWithMentions(message, result, client);
 }
 
-module.exports = { depositarCommand, retirarPoupancaCommand };
+
+async function saldoCommand(message, command, client) {
+  const result = saldo(message, command.argsText);
+  await replyWithMentions(message, result, client);
+}
+
+module.exports = { depositarCommand, retirarPoupancaCommand, saldoCommand };

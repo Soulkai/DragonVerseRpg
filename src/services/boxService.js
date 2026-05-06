@@ -4,6 +4,7 @@ const { parseAmount } = require('../utils/numbers');
 const { money } = require('../utils/format');
 const { getOrCreatePlayerFromMessage, getPlayerByWhatsAppId } = require('./playerService');
 const { grantZenies } = require('./rewardService');
+const { recordLedger } = require('./ledgerService');
 
 const BOX_DAILY_LIMIT = 10;
 
@@ -70,9 +71,51 @@ function localDateKey(date = new Date()) {
   return formatter.format(date);
 }
 
+function randomInRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function rollBoxMultiplier() {
+  const roll = Math.random() * 100;
+
+  if (roll < 18) {
+    return { multiplier: 0, tier: '18% — 0x, não veio dinheiro' };
+  }
+
+  if (roll < 50) {
+    return { multiplier: randomInRange(0.001, 0.05), tier: '32% — 0,001x até 0,05x' };
+  }
+
+  if (roll < 75) {
+    return { multiplier: randomInRange(0.05, 0.9), tier: '25% — 0,05x até 0,9x' };
+  }
+
+  if (roll < 90) {
+    return { multiplier: randomInRange(1, 1.5), tier: '15% — 1x até 1,5x' };
+  }
+
+  if (roll < 97) {
+    return { multiplier: randomInRange(2, 2.5), tier: '7% — 2x até 2,5x' };
+  }
+
+  if (roll < 99.5) {
+    return { multiplier: randomInRange(2.5, 3), tier: '2,5% — 2,5x até 3x' };
+  }
+
+  return { multiplier: randomInRange(3, 4), tier: '0,5% — 3x até 4x' };
+}
+
+function formatMultiplier(multiplier) {
+  if (!multiplier) return '0x';
+  return `${multiplier.toFixed(3).replace('.', ',').replace(/0+$/, '').replace(/,$/, '')}x`;
+}
+
 function randomMoney(price) {
-  const multiplier = 0.01 + Math.random() * 6.99;
-  return Math.floor(price * multiplier);
+  const result = rollBoxMultiplier();
+  return {
+    ...result,
+    amount: Math.floor(price * result.multiplier),
+  };
 }
 
 function getTodayBoxCount(playerId) {
@@ -102,7 +145,14 @@ function listBoxes(message) {
       ...BOXES.map((box) => `▢ • */caixa abrir ${box.id}* — ${money(box.price)} Zenies`),
       '▢',
       '▢ • Cada player pode abrir até *10 caixas por dia*.',
-      '▢ • Cada caixa vem com dinheiro aleatório de *0,01x até 7x* o valor da caixa.',
+      '▢ • O dinheiro da caixa usa chance ponderada:',
+      '▢   ⤷ 18%  → 0x, não vem dinheiro.',
+      '▢   ⤷ 32%  → 0,001x até 0,05x.',
+      '▢   ⤷ 25%  → 0,05x até 0,9x.',
+      '▢   ⤷ 15%  → 1x até 1,5x.',
+      '▢   ⤷ 7%   → 2x até 2,5x.',
+      '▢   ⤷ 2,5% → 2,5x até 3x.',
+      '▢   ⤷ 0,5% → 3x até 4x.',
       '▢ • Também pode vir colecionável. Ao juntar 10, o prêmio é ativado automaticamente.',
       '▢',
       '╰━━─「🎁」─━━',
@@ -138,7 +188,8 @@ function openBox(message, argsText = '') {
     return { ok: false, message: `Saldo insuficiente. Essa caixa custa *${money(box.price)} Zenies* e você tem *${money(player.zenies)}*.` };
   }
 
-  const moneyReward = randomMoney(box.price);
+  const rewardRoll = randomMoney(box.price);
+  const moneyReward = rewardRoll.amount;
   const collectible = Math.random() < 0.65 ? weightedCollectible() : null;
   let completionText = null;
 
@@ -149,6 +200,15 @@ function openBox(message, argsText = '') {
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(box.price, player.id);
+
+    recordLedger({
+      playerId: player.id,
+      direction: 'saida',
+      category: 'caixa_compra',
+      amount: box.price,
+      description: `Abertura de ${box.label}`,
+      metadata: { boxId: box.id, multiplier: rewardRoll.multiplier },
+    });
 
     grantZenies(player.id, moneyReward, 'caixa');
 
@@ -194,6 +254,8 @@ function openBox(message, argsText = '') {
       '',
       `Caixa: *${box.label}*`,
       `Valor pago: *${money(box.price)} Zenies*`,
+      `🎲 Multiplicador: *${formatMultiplier(rewardRoll.multiplier)}*`,
+      `📊 Faixa sorteada: *${rewardRoll.tier}*`,
       `💰 Dinheiro encontrado: *${money(moneyReward)} Zenies*`,
       `📦 Caixas abertas hoje: *${openedToday + 1}/${BOX_DAILY_LIMIT}*`,
       collectible ? `🏺 Colecionável: ${collectible.emoji} *${collectible.name}*` : '🏺 Colecionável: nenhum dessa vez.',

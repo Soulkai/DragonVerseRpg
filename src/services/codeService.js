@@ -58,7 +58,7 @@ async function createGenericCode(message, argsText = '') {
   }
 
   const label = type === 'desconto'
-    ? `${value}% de desconto nas próximas compras`
+    ? `${value}% de desconto na próxima compra`
     : type === 'ki'
       ? `Ki ${formatKiLevel(value)}`
       : `${money(value)} Zenies`;
@@ -113,11 +113,11 @@ function redeemGenericCode(message, argsText = '') {
         INSERT INTO player_discounts (player_id, percent, uses)
         VALUES (?, ?, 1)
         ON CONFLICT(player_id) DO UPDATE SET
-          percent = MAX(percent, excluded.percent),
-          uses = uses + 1,
+          percent = excluded.percent,
+          uses = 1,
           updated_at = CURRENT_TIMESTAMP
       `).run(player.id, code.value);
-      rewardText = `${code.value}% de desconto na próxima compra`;
+      rewardText = `${code.value}% de desconto válido somente na próxima compra`;
     } else if (code.type === 'ki') {
       db.prepare(`
         UPDATE players

@@ -104,7 +104,10 @@ TIMEZONE=America/Campo_Grande
 /definirki @pessoa 5
 /addcargo @pessoa A.S
 /adduniverso 3
-/codigoresgate 2 Bardock
+/codigoresgate Bardock      # válido em qualquer universo
+/codigoresgate 2 Bardock    # válido somente no Universo 2
+/codes desconto 50 5        # desconto só na próxima compra
+/inspecionar CODIGO
 /eventos ativar
 /eventos desativar
 ```
@@ -245,26 +248,26 @@ Tabela de preços:
 
 ```txt
 Ki 01 = grátis
-Ki 02 = 150.000.000 Zenies
-Ki 03 = 250.000.000 Zenies
-Ki 04 = 320.000.000 Zenies
-Ki 05 = 550.000.000 Zenies
-Ki 06 = 700.000.000 Zenies
-Ki 07 = 920.000.000 Zenies
-Ki 08 = 1.000.000.000 Zenies
-Ki 09 = 1.500.000.000 Zenies
-Ki 10 = 2.000.000.000 Zenies
-Ki 11+ = 2.000.000.000 Zenies por nível
+Ki 02 = 750.000.000 Zenies
+Ki 03 = 1.250.000.000 Zenies
+Ki 04 = 1.600.000.000 Zenies
+Ki 05 = 2.750.000.000 Zenies
+Ki 06 = 3.500.000.000 Zenies
+Ki 07 = 4.600.000.000 Zenies
+Ki 08 = 5.000.000.000 Zenies
+Ki 09 = 7.500.000.000 Zenies
+Ki 10 = 10.000.000.000 Zenies
+Ki 11+ = 10.000.000.000 Zenies por nível
 ```
 
 ### Itens da loja
 
 ```txt
-Semente dos Deuses = 2.000.000.000 Zenies
-Scouter = 70.000.000 Zenies
-Nave Espacial = 700.000.000 Zenies
-Cauda Saiyajin = 200.000.000 Zenies
-Nuvem Voadora = 200.000.000 Zenies
+Semente dos Deuses = 10.000.000.000 Zenies
+Scouter = 350.000.000 Zenies
+Nave Espacial = 3.500.000.000 Zenies
+Cauda Saiyajin = 1.000.000.000 Zenies
+Nuvem Voadora = 1.000.000.000 Zenies
 ```
 
 Exemplos:
@@ -455,13 +458,21 @@ Regras:
 
 ```txt
 /pix @pessoa valor
+/extrato
+/extrato entrada
+/extrato saida
+/extrato perda
 ```
 
 Exemplo:
 
 ```txt
 /pix @Goku 50000000
+/extrato
+/extrato perda
 ```
+
+O `/extrato` mostra entradas, saídas, perdas, PIX, compras, caixas, eventos e outros movimentos financeiros registrados pelo bot.
 
 O bot desconta o valor do jogador que enviou, adiciona ao jogador marcado e registra a movimentação na tabela `transfer_history`.
 
@@ -553,14 +564,16 @@ O Poker usa Texas Hold'em simplificado. O bot envia as cartas de cada jogador no
 ### Truco Paulista limpo
 
 ```txt
-/truco criar
+/truco criar valor
 /truco entrar
 /truco iniciar
 /truco jogar 1
-/truco truco
-/truco seis
-/truco nove
-/truco doze
+/3
+/6
+/9
+/12
+/aceitar
+/recusar
 /truco cartas
 ```
 
@@ -595,10 +608,12 @@ O Blackjack agora funciona em mesa de grupo. Os jogadores entram, o bot marca qu
 /truco entrar
 /truco iniciar
 /truco jogar 1
-/truco truco
-/truco seis
-/truco nove
-/truco doze
+/3
+/6
+/9
+/12
+/aceitar
+/recusar
 ```
 
 O Truco agora inicia com valor de entrada, aceita 2 ou 4 jogadores, sorteia duplas no 2v2, entrega cartas a cada nova mão, vira a manilha e joga até um time chegar a 12 pontos. O prêmio é o pote total das apostas; em 1v1 vai inteiro para o vencedor, em 2v2 é dividido entre a dupla.

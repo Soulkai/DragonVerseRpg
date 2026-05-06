@@ -2,8 +2,9 @@ const db = require('../database/db');
 const { isAdmin } = require('../utils/admin');
 const { getFirstMentionedId, removeFirstMention } = require('../utils/mentions');
 const { parseAmount, parseInteger } = require('../utils/numbers');
-const { money, formatKiLevel } = require('../utils/format');
+const { money, formatKiLevel, formatDateTime, getNextDepositInterestAt, balanceCaption } = require('../utils/format');
 const { grantZenies } = require('./rewardService');
+const { recordLedger } = require('./ledgerService');
 const {
   DAY_MS,
   SALARY_INTERVAL_DAYS,
@@ -65,6 +66,13 @@ async function addZenies(message, argsText) {
   `).run(amount, target.id);
 
   const updated = getPlayerByWhatsAppId(targetWhatsappId);
+  recordLedger({
+    playerId: updated.id,
+    direction: 'entrada',
+    category: 'addzenies',
+    amount,
+    description: 'Zenies adicionados por ADM',
+  });
 
   return {
     ok: true,
@@ -105,6 +113,15 @@ async function retirarZenies(message, argsText) {
   `).run(amount, target.id);
 
   const updated = getPlayerByWhatsAppId(targetWhatsappId);
+  if (discount > 0) {
+    recordLedger({
+      playerId: updated.id,
+      direction: 'perda',
+      category: 'retirarzenies',
+      amount: discount,
+      description: 'Zenies retirados por ADM',
+    });
+  }
 
   return {
     ok: true,
@@ -204,6 +221,24 @@ function transferZenies(message, argsText, options = {}) {
       INSERT INTO transfer_history (from_player_id, to_player_id, amount)
       VALUES (?, ?, ?)
     `).run(sender.id, target.id, amount);
+
+    recordLedger({
+      playerId: sender.id,
+      direction: 'saida',
+      category: 'pix_enviado',
+      amount,
+      relatedPlayerId: target.id,
+      description: 'PIX enviado',
+    });
+
+    recordLedger({
+      playerId: target.id,
+      direction: 'entrada',
+      category: 'pix_recebido',
+      amount,
+      relatedPlayerId: sender.id,
+      description: 'PIX recebido',
+    });
   });
 
   transaction();
@@ -245,12 +280,22 @@ function depositar(message, argsText) {
     UPDATE players
     SET zenies = zenies - ?,
         deposito = deposito + ?,
+        last_deposit_at = CURRENT_TIMESTAMP,
         last_deposit_interest_at = COALESCE(last_deposit_interest_at, CURRENT_TIMESTAMP),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(amount, amount, player.id);
 
+  recordLedger({
+    playerId: player.id,
+    direction: 'saida',
+    category: 'depositar',
+    amount,
+    description: 'Depósito na poupança',
+  });
+
   const updated = getPlayerByWhatsAppId(player.whatsapp_id);
+  const nextInterestAt = getNextDepositInterestAt(updated);
 
   return {
     ok: true,
@@ -259,9 +304,11 @@ function depositar(message, argsText) {
       '',
       `📥 Depositado: *${money(amount)} Zenies*`,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
-      `🏦 Total no depósito: *${money(updated.deposito)} Zenies*`,
+      `🏦 Total na poupança: *${money(updated.deposito)} Zenies*`,
+      `📅 Último depósito: *${formatDateTime(updated.last_deposit_at)}*`,
+      `⏳ Próximo rendimento: *${nextInterestAt ? formatDateTime(nextInterestAt) : 'Sem previsão'}*`,
       '',
-      'A cada 4 dias, o depósito gera *25% de juros* que vão para seu saldo de Zenies.',
+      'A cada 4 dias, a poupança gera *25% de juros* que vão para seu saldo de Zenies.',
     ].join('\n'),
   };
 }
@@ -285,11 +332,23 @@ function retirarPoupanca(message, argsText = '') {
     UPDATE players
     SET deposito = deposito - ?,
         zenies = zenies + ?,
+        last_deposit_at = CASE WHEN deposito - ? <= 0 THEN NULL ELSE last_deposit_at END,
+        last_deposit_interest_at = CASE WHEN deposito - ? <= 0 THEN NULL ELSE last_deposit_interest_at END,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(amount, amount, player.id);
+  `).run(amount, amount, amount, amount, player.id);
+
+  recordLedger({
+    playerId: player.id,
+    direction: 'entrada',
+    category: 'retirar_poupanca',
+    amount,
+    description: 'Retirada da poupança',
+  });
 
   const updated = getPlayerByWhatsAppId(player.whatsapp_id);
+  const nextInterestAt = getNextDepositInterestAt(updated);
+
   return {
     ok: true,
     message: [
@@ -298,7 +357,18 @@ function retirarPoupanca(message, argsText = '') {
       `📤 Retirado: *${money(amount)} Zenies*`,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
       `🏦 Restante na poupança: *${money(updated.deposito)} Zenies*`,
+      Number(updated.deposito || 0) > 0 ? `⏳ Próximo rendimento: *${nextInterestAt ? formatDateTime(nextInterestAt) : 'Sem previsão'}*` : '⏳ Próximo rendimento: *Nenhum depósito ativo*',
     ].join('\n'),
+  };
+}
+
+function saldo(message) {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const updated = getPlayerByWhatsAppId(player.whatsapp_id) || player;
+
+  return {
+    ok: true,
+    message: balanceCaption(updated),
   };
 }
 
@@ -393,6 +463,7 @@ module.exports = {
   transferZenies,
   depositar,
   retirarPoupanca,
+  saldo,
   applyDueSalaries,
   applyDueDepositInterest,
   runEconomyMaintenance,

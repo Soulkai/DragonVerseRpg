@@ -12,7 +12,7 @@ const { addZeniesCommand, retirarZeniesCommand, definirKiCommand } = require('./
 const { addUniversoCommand } = require('./commands/addUniverso');
 const { addCargoCommand } = require('./commands/addCargo');
 const { cargosCommand } = require('./commands/cargos');
-const { depositarCommand, retirarPoupancaCommand } = require('./commands/depositar');
+const { depositarCommand, retirarPoupancaCommand, saldoCommand } = require('./commands/depositar');
 const { pixCommand } = require('./commands/pix');
 const { lojaCommand } = require('./commands/loja');
 const { comprarCommand } = require('./commands/comprar');
@@ -21,7 +21,7 @@ const { eventosCommand, responderCommand, letraCommand, chutarCommand, pegarComm
 const { addPersonagemCommand, rmvPersonagemCommand } = require('./commands/personagemAdmin');
 const { trocarPersonagemCommand } = require('./commands/trocarPersonagem');
 const { meuIdCommand } = require('./commands/meuId');
-const { blackjackCommand, pokerCommand, trucoCommand, regrasCommand } = require('./commands/cardGames');
+const { blackjackCommand, pokerCommand, trucoCommand, ltrucoCommand, trucoAnyCommand, regrasCommand } = require('./commands/cardGames');
 const { conviteCommand } = require('./commands/convite');
 const { codesCommand, resgatarCommand } = require('./commands/codes');
 const { caixaCommand } = require('./commands/caixa');
@@ -30,6 +30,12 @@ const { runEconomyMaintenance } = require('./services/economyService');
 const { purgeInactiveCharacters } = require('./services/inactivityService');
 const { touchPlayerActivity } = require('./services/playerService');
 const { runAutoEvents } = require('./services/eventService');
+const { gerarTorneioCommand, inscreverTorneioCommand, torneioCommand, vencedorTorneioCommand } = require('./commands/torneio');
+const { playersListCommand, deletePlayerCommand } = require('./commands/playerAdmin');
+const { rankeadaCommand, listaRankCommand, iRankCommand, desafioCommand, aceitarDesafioCommand, recusarDesafioCommand, registrarVencedorRankedCommand } = require('./commands/ranked');
+const { zMarketCommand, zBuyCommand } = require('./commands/zMarket');
+const { inspecionarCommand } = require('./commands/inspecionar');
+const { extratoCommand } = require('./commands/extrato');
 
 migrate();
 
@@ -107,6 +113,18 @@ client.on('message', async (message) => {
         await personagensCommand(message, command);
         break;
 
+
+      case 'players':
+      case 'jogadores':
+        await playersListCommand(message, command, client);
+        break;
+
+      case 'deleteplayer':
+      case 'deletarplayer':
+      case 'deletar player':
+        await deletePlayerCommand(message, command, client);
+        break;
+
       case 'codigoresgate':
       case 'codigo resgate':
       case 'códigoresgate':
@@ -181,6 +199,11 @@ client.on('message', async (message) => {
         await depositarCommand(message, command, client);
         break;
 
+      case 'saldo':
+      case 'poupanca':
+        await saldoCommand(message, command, client);
+        break;
+
       case 'retirarpoupanca':
       case 'retirar poupanca':
       case 'retirar poupança':
@@ -191,6 +214,10 @@ client.on('message', async (message) => {
 
       case 'pix':
         await pixCommand(message, command, client);
+        break;
+
+      case 'extrato':
+        await extratoCommand(message, command, client);
         break;
 
       case 'transferir':
@@ -213,9 +240,81 @@ client.on('message', async (message) => {
         await resgatarCommand(message, command, client);
         break;
 
+      case 'inspecionar':
+      case 'inspecionarcodigo':
+      case 'inspecionar codigo':
+      case 'inspect':
+        await inspecionarCommand(message, command, client);
+        break;
+
       case 'caixa':
       case 'caixas':
         await caixaCommand(message, command, client);
+        break;
+
+      case 'rankeada':
+        await rankeadaCommand(message, command, client);
+        break;
+
+      case 'listarank':
+      case 'lista rank':
+      case 'ranklist':
+        await listaRankCommand(message, command, client);
+        break;
+
+      case 'irank':
+      case 'i rank':
+        await iRankCommand(message, command, client);
+        break;
+
+      case 'desafio':
+        await desafioCommand(message, command, client);
+        break;
+
+      case 'adesafio':
+      case 'aceitardesafio':
+      case 'aceitar desafio':
+        await aceitarDesafioCommand(message, command, client);
+        break;
+
+      case 'rdesafio':
+      case 'recusardesafio':
+      case 'recusar desafio':
+        await recusarDesafioCommand(message, command, client);
+        break;
+
+      case 'rv':
+        await registrarVencedorRankedCommand(message, command, client);
+        break;
+
+      case 'zmarket':
+      case 'zloja':
+        await zMarketCommand(message, command, client);
+        break;
+
+      case 'zbuy':
+      case 'zcomprar':
+        await zBuyCommand(message, command, client);
+        break;
+
+      case 'gerartorneio':
+      case 'gerar torneio':
+        await gerarTorneioCommand(message, command, client);
+        break;
+
+      case 'inscrever':
+      case 'inscrevertorneio':
+      case 'inscrever torneio':
+        await inscreverTorneioCommand(message, command, client);
+        break;
+
+      case 'torneio':
+      case 'torneios':
+        await torneioCommand(message, command, client);
+        break;
+
+      case 'vencedor':
+        await vencedorTorneioCommand(message, command, client);
         break;
 
       case 'eventos':
@@ -323,6 +422,21 @@ client.on('message', async (message) => {
 
       case 'truco':
         await trucoCommand(message, command, client);
+        break;
+
+      case 'ltruco':
+      case 'limpotruco':
+      case 'limpo truco':
+        await ltrucoCommand(message, command, client);
+        break;
+
+      case '3':
+      case '6':
+      case '9':
+      case '12':
+      case 'aceitar':
+      case 'recusar':
+        await trucoAnyCommand(message, { ...command, argsText: command.name }, client);
         break;
 
       case 'regras':

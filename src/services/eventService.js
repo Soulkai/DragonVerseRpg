@@ -5,6 +5,7 @@ const { normalizeText } = require('../utils/text');
 const { money } = require('../utils/format');
 const { parseAmount } = require('../utils/numbers');
 const { grantZenies } = require('./rewardService');
+const { recordLedger } = require('./ledgerService');
 const { registerPresence, formatStreakStatus, localDateKey } = require('./streakService');
 const { createDailyBountyForChat, formatBounty } = require('./bountyService');
 const {
@@ -1066,7 +1067,23 @@ function tigrinho(message, argsText = '') {
   });
 
   transaction();
+  if (totalLoss > 0) {
+    recordLedger({
+      playerId: player.id,
+      direction: 'perda',
+      category: 'tigrinho_aposta',
+      amount: totalLoss,
+      description: prize.isPenalty ? 'Tigrinho — perda com punição' : 'Tigrinho — aposta perdida',
+    });
+  }
   if (reward > 0) {
+    recordLedger({
+      playerId: player.id,
+      direction: 'entrada',
+      category: 'tigrinho',
+      amount: reward,
+      description: 'Prêmio do Tigrinho',
+    });
     const { applyReferralBonus } = require('./rewardService');
     applyReferralBonus(player.id, reward, 'tigrinho');
   }

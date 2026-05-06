@@ -1,4 +1,5 @@
 const db = require('../database/db');
+const { recordLedger } = require('./ledgerService');
 
 const REFERRAL_BONUS_RATE = 0.10;
 
@@ -51,7 +52,15 @@ function applyReferralBonus(recruitId, earnedAmount, source = 'ganho') {
     VALUES (?, ?, ?)
   `).run(recruitId, referral.recruiter_id, bonus);
 
-  void source;
+  recordLedger({
+    playerId: referral.recruiter_id,
+    direction: 'entrada',
+    category: 'bonus_indicacao',
+    amount: bonus,
+    relatedPlayerId: recruitId,
+    description: `Bônus de indicação: 10% de ${source}`,
+  });
+
   return bonus;
 }
 
@@ -60,6 +69,14 @@ function grantZenies(playerId, amount, source = 'ganho', options = {}) {
   if (value <= 0) return { amount: 0, referralBonus: 0 };
 
   addZeniesDirect(playerId, value);
+  recordLedger({
+    playerId,
+    direction: 'entrada',
+    category: source,
+    amount: value,
+    description: options.description || source,
+  });
+
   const referralBonus = options.skipReferral ? 0 : applyReferralBonus(playerId, value, source);
   return { amount: value, referralBonus };
 }

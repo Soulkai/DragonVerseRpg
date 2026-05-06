@@ -6,6 +6,7 @@ const {
   getOrCreatePlayerFromMessage,
   getPlayerByWhatsAppId,
 } = require('./playerService');
+const { recordLedger } = require('./ledgerService');
 
 
 function getActiveDiscount(playerId) {
@@ -59,34 +60,34 @@ function formatShop() {
     '> Este é o Ki inicial de todo Lutador do RPG onde para tê-lo não precisa pagar nada.',
     '',
     'Ki: 02',
-    '> Preço: 150.000.000 Zenies',
+    '> Preço: 750.000.000 Zenies',
     '',
     'Ki: 03',
-    '> Preço: 250.000.000 Zenies',
+    '> Preço: 1.250.000.000 Zenies',
     '',
     'Ki: 04',
-    '> Preço: 320.000.000 Zenies',
+    '> Preço: 1.600.000.000 Zenies',
     '',
     'Ki: 05',
-    '> Preço: 550.000.000 Zenies',
+    '> Preço: 2.750.000.000 Zenies',
     '',
     'Ki: 06',
-    '> Preço: 700.000.000 Zenies',
+    '> Preço: 3.500.000.000 Zenies',
     '',
     'Ki: 07',
-    '> Preço: 920.000.000 Zenies',
+    '> Preço: 4.600.000.000 Zenies',
     '',
     'Ki: 08',
-    '> Preço: 1.000.000.000 Zenies',
+    '> Preço: 5.000.000.000 Zenies',
     '',
     'Ki: 09',
-    '> Preço: 1.500.000.000 Zenies',
+    '> Preço: 7.500.000.000 Zenies',
     '',
     'Ki: 10',
-    '> Preço: 2.000.000.000 Zenies',
+    '> Preço: 10.000.000.000 Zenies',
     '',
     'Ki: 11+',
-    '> A partir deste Ki em diante é necessário pagar: 2.000.000.000 Zenies',
+    '> A partir deste Ki em diante é necessário pagar: 10.000.000.000 Zenies',
     '',
     'Para comprar o próximo Ki, use: */comprar Ki*',
     '',
@@ -147,6 +148,13 @@ function buyNextKi(message) {
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(price, nextKi, player.id);
+  recordLedger({
+    playerId: player.id,
+    direction: 'saida',
+    category: 'compra_ki',
+    amount: price,
+    description: `Compra de Ki ${formatKiLevel(nextKi)}`,
+  });
   if (discount.hasDiscount) consumePurchaseDiscount(player.id);
 
   const updated = getPlayerByWhatsAppId(player.whatsapp_id);
@@ -215,6 +223,15 @@ function buyItem(message, itemName) {
       INSERT INTO purchase_history (player_id, purchase_type, target_id, target_name, price)
       VALUES (?, 'item', ?, ?, ?)
     `).run(player.id, item.id, item.name, price);
+
+    recordLedger({
+      playerId: player.id,
+      direction: 'saida',
+      category: 'compra_item',
+      amount: price,
+      description: `Compra: ${item.name}`,
+      metadata: { itemId: item.id, itemName: item.name },
+    });
 
     if (discount.hasDiscount) consumePurchaseDiscount(player.id);
   });

@@ -6,6 +6,7 @@ const { isSupremeRoleId } = require('../data/roles');
 const { normalizeText, slugify } = require('../utils/text');
 const { money } = require('../utils/format');
 const { isAdmin } = require('../utils/admin');
+const { recordLedger } = require('./ledgerService');
 const {
   getOrCreatePlayerFromMessage,
   getWhatsAppIdFromMessage,
@@ -55,14 +56,32 @@ function getSupremeClaimByCharacterSlug(characterSlug) {
 
 function consumeRescueCode({ code, universeId, characterId, whatsappId }) {
   const normalizedCode = String(code || '').trim().toUpperCase();
-  if (!normalizedCode) return { ok: false, message: 'Esse personagem está bloqueado. Envie um código de resgate para registrar.' };
+  if (!normalizedCode) {
+    return { ok: false, message: 'Esse personagem está bloqueado. Envie um código de resgate para registrar.' };
+  }
+
+  const character = db.prepare('SELECT * FROM characters WHERE id = ?').get(characterId);
+  if (!character) return { ok: false, message: 'Personagem não encontrado para validar o código.' };
 
   const rescue = db.prepare(`
-    SELECT * FROM rescue_codes
-    WHERE code = ? AND universe_id = ? AND character_id = ?
-  `).get(normalizedCode, universeId, characterId);
+    SELECT *
+    FROM rescue_codes
+    WHERE UPPER(code) = ?
+      AND (
+        (COALESCE(is_universal, 0) = 1 AND character_slug = ?)
+        OR
+        (COALESCE(is_universal, 0) = 0 AND universe_id = ? AND character_id = ?)
+      )
+    LIMIT 1
+  `).get(normalizedCode, character.slug, universeId, characterId);
 
-  if (!rescue) return { ok: false, message: 'Código de resgate inválido para esse personagem.' };
+  if (!rescue) {
+    return {
+      ok: false,
+      message: 'Código de resgate inválido para esse personagem ou universo.',
+    };
+  }
+
   if (rescue.used_at) return { ok: false, message: 'Esse código de resgate já foi usado.' };
 
   db.prepare(`
@@ -103,7 +122,7 @@ function registerCharacter(message, universeId, characterName, rescueCode = null
     if (supremeOccupied) return { ok: false, message: `*${character.name}* já está sendo usado por alguém da Alta Cúpula.` };
   }
 
-  if (character.is_locked && !isSupreme) {
+  if (character.is_locked) {
     const codeResult = consumeRescueCode({
       code: rescueCode,
       universeId,
@@ -195,15 +214,74 @@ function listCharacters(universeId) {
   return { ok: true, message: lines.join('\n') };
 }
 
-function generateRescueCode(message, universeId, characterName) {
-  const universeValidation = validateUniverse(universeId);
-  if (!universeValidation.ok) return universeValidation;
+function findRepresentativeCharacterForCode(characterName, universeId = null) {
+  const slug = slugify(characterName);
+  if (!slug) return null;
 
-  const character = findCharacter(universeId, characterName);
-  if (!character) return { ok: false, message: `Não encontrei *${characterName}* no Universo ${universeId}.` };
+  if (universeId) {
+    return findCharacter(universeId, characterName);
+  }
+
+  const template = db.prepare('SELECT * FROM character_templates WHERE slug = ?').get(slug);
+  const character = db.prepare(`
+    SELECT *
+    FROM characters
+    WHERE slug = ?
+    ORDER BY universe_id ASC
+    LIMIT 1
+  `).get(slug);
+
+  if (!character && template) {
+    return {
+      id: null,
+      universe_id: null,
+      name: template.name,
+      slug: template.slug,
+      is_locked: template.is_locked,
+    };
+  }
+
+  return character || null;
+}
+
+function generateRescueCode(message, universeId, characterName) {
+  const universal = !universeId;
+  let universeValidation = null;
+
+  if (!universal) {
+    universeValidation = validateUniverse(universeId);
+    if (!universeValidation.ok) return universeValidation;
+  }
+
+  const character = findRepresentativeCharacterForCode(characterName, universal ? null : universeId);
+  if (!character) {
+    return {
+      ok: false,
+      message: universal
+        ? `Não encontrei *${characterName}* na lista global de personagens.`
+        : `Não encontrei *${characterName}* no Universo ${universeId}.`,
+    };
+  }
 
   if (!character.is_locked) {
     return { ok: false, message: `*${character.name}* não é bloqueado, então não precisa de código de resgate.` };
+  }
+
+  // A tabela rescue_codes antiga exige universe_id e character_id.
+  // Para código universal, guardamos um personagem representante apenas para manter compatibilidade,
+  // mas a validação real usa is_universal + character_slug.
+  const representative = character.id
+    ? character
+    : db.prepare(`
+        SELECT *
+        FROM characters
+        WHERE slug = ?
+        ORDER BY universe_id ASC
+        LIMIT 1
+      `).get(character.slug);
+
+  if (!representative?.id) {
+    return { ok: false, message: `Não encontrei *${character.name}* em nenhum universo ativo para gerar o código.` };
   }
 
   const createdBy = getWhatsAppIdFromMessage(message);
@@ -214,9 +292,25 @@ function generateRescueCode(message, universeId, characterName) {
     code = `DBV-${crypto.randomBytes(3).toString('hex').toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
     try {
       db.prepare(`
-        INSERT INTO rescue_codes (code, universe_id, character_id, created_by)
-        VALUES (?, ?, ?, ?)
-      `).run(code, universeId, character.id, createdBy);
+        INSERT INTO rescue_codes (
+          code,
+          universe_id,
+          character_id,
+          is_universal,
+          character_slug,
+          character_name,
+          created_by
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        code,
+        representative.universe_id,
+        representative.id,
+        universal ? 1 : 0,
+        character.slug,
+        character.name,
+        createdBy
+      );
       inserted = true;
     } catch (error) {
       if (error.code !== 'SQLITE_CONSTRAINT_UNIQUE') throw error;
@@ -229,10 +323,13 @@ function generateRescueCode(message, universeId, characterName) {
       '🔑 *Código de resgate gerado!*',
       '',
       `👤 Personagem: *${character.name}*`,
-      `🌌 Universo: *${universeId}*`,
+      universal ? '🌌 Validade: *qualquer universo*' : `🌌 Validade: *somente Universo ${universeId}*`,
       `🎟️ Código: *${code}*`,
       '',
-      `Para usar: */Registro ${universeId} ${character.name} ${code}*`,
+      universal
+        ? `Para usar: */Registro 2 ${character.name} ${code}*\nOu troque o número 2 pelo universo desejado.`
+        : `Para usar: */Registro ${universeId} ${character.name} ${code}*`,
+      `Para troca: */trocarpersonagem ${character.name} ${code}*`,
     ].join('\n'),
   };
 }
@@ -296,81 +393,143 @@ async function canManageCharacters(message, universeId) {
   };
 }
 
-async function addCharacterToUniverse(message, argsText = '') {
-  const player = getOrCreatePlayerFromMessage(message, { touch: true });
-  const parsed = splitUniverseAndName(argsText, player);
-  const universeValidation = validateUniverse(parsed.universeId);
-  if (!universeValidation.ok) return universeValidation;
+async function canManageGlobalCharacters(message) {
+  if (await isAdmin(message)) return { ok: true };
 
-  const permission = await canManageCharacters(message, parsed.universeId);
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const role = String(player.cargo_id || '').toUpperCase();
+  if (['A.S', 'S.M'].includes(role)) return { ok: true };
+
+  return {
+    ok: false,
+    message: 'Apenas admins, Autoridade Suprema ou Supremo Ministro podem alterar a lista global de personagens.',
+  };
+}
+
+function parseGlobalCharacterArgs(argsText = '') {
+  const parts = String(argsText || '').trim().split(/\s+/).filter(Boolean);
+
+  // Compatibilidade com o formato antigo: /addpersonagem 3 Nome Free.
+  // O número é ignorado porque agora a lista é global para todos os universos.
+  if (parts.length && /^\d+$/.test(parts[0])) parts.shift();
+
+  return parts.join(' ').trim();
+}
+
+function syncTemplateCharacterToAllUniverses(characterName, isLocked) {
+  const slug = slugify(characterName);
+  const imagePath = `assets/personagens/${slug}.png`;
+
+  const transaction = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO character_templates (name, slug, is_locked, image_path)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(slug) DO UPDATE SET
+        name = excluded.name,
+        is_locked = excluded.is_locked,
+        image_path = COALESCE(character_templates.image_path, excluded.image_path),
+        updated_at = CURRENT_TIMESTAMP
+    `).run(characterName, slug, isLocked ? 1 : 0, imagePath);
+
+    const universes = db.prepare('SELECT id FROM universes WHERE is_active = 1').all();
+    const upsert = db.prepare(`
+      INSERT INTO characters (universe_id, name, slug, is_locked, image_path)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(universe_id, slug) DO UPDATE SET
+        name = excluded.name,
+        is_locked = excluded.is_locked,
+        image_path = COALESCE(characters.image_path, excluded.image_path)
+    `);
+
+    for (const universe of universes) {
+      upsert.run(universe.id, characterName, slug, isLocked ? 1 : 0, imagePath);
+    }
+  });
+
+  transaction();
+}
+
+async function addCharacterToUniverse(message, argsText = '') {
+  const permission = await canManageGlobalCharacters(message);
   if (!permission.ok) return permission;
 
-  const match = parsed.rest.match(/\s+(block|blocked|bloqueado|lock|locked|free|livre)$/i);
+  const raw = parseGlobalCharacterArgs(argsText);
+  const match = raw.match(/\s+(block|blocked|bloqueado|lock|locked|free|livre)$/i);
   if (!match) {
     return {
       ok: false,
-      message: 'Use assim: */addpersonagem Nome do Personagem Block* ou */addpersonagem Nome do Personagem Free*\nTambém aceita: */addpersonagem 3 Nome Free*',
+      message: 'Use assim: */addpersonagem Nome do Personagem Block* ou */addpersonagem Nome do Personagem Free*\nAgora esse comando altera todos os universos e os próximos universos criados.',
     };
   }
 
   const status = normalizeText(match[1]);
-  const characterName = parsed.rest.slice(0, match.index).trim();
+  const characterName = raw.slice(0, match.index).trim();
   if (!characterName) return { ok: false, message: 'Informe o nome do personagem.' };
 
-  const isLocked = ['block', 'blocked', 'bloqueado', 'lock', 'locked'].includes(status) ? 1 : 0;
+  const isLocked = ['block', 'blocked', 'bloqueado', 'lock', 'locked'].includes(status);
   const slug = slugify(characterName);
   if (!slug) return { ok: false, message: 'Nome de personagem inválido.' };
 
-  const existed = findCharacter(parsed.universeId, characterName);
-  db.prepare(`
-    INSERT INTO characters (universe_id, name, slug, is_locked, image_path)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(universe_id, slug) DO UPDATE SET
-      name = excluded.name,
-      is_locked = excluded.is_locked,
-      image_path = COALESCE(characters.image_path, excluded.image_path)
-  `).run(parsed.universeId, characterName, slug, isLocked, `assets/personagens/${slug}.png`);
+  const existed = db.prepare('SELECT id FROM character_templates WHERE slug = ?').get(slug);
+  syncTemplateCharacterToAllUniverses(characterName, isLocked);
+  const universesUpdated = db.prepare('SELECT COUNT(*) AS total FROM universes WHERE is_active = 1').get().total || 0;
 
   return {
     ok: true,
     message: [
-      existed ? '✅ *Personagem atualizado!*' : '✅ *Personagem adicionado!*',
+      existed ? '✅ *Personagem global atualizado!*' : '✅ *Personagem global adicionado!*',
       '',
-      `🌌 Universo: *${parsed.universeId}*`,
       `👤 Personagem: *${characterName}*`,
       `Estado: *${isLocked ? 'Bloqueado 🔒' : 'Livre ⚪'}*`,
+      `🌌 Universos atualizados: *${universesUpdated}*`,
+      '',
+      'Esse personagem também entrará automaticamente nos próximos universos criados.',
     ].join('\n'),
   };
 }
 
 async function removeCharacterFromUniverse(message, argsText = '') {
-  const player = getOrCreatePlayerFromMessage(message, { touch: true });
-  const parsed = splitUniverseAndName(argsText, player);
-  const universeValidation = validateUniverse(parsed.universeId);
-  if (!universeValidation.ok) return universeValidation;
-
-  const permission = await canManageCharacters(message, parsed.universeId);
+  const permission = await canManageGlobalCharacters(message);
   if (!permission.ok) return permission;
 
-  const characterName = parsed.rest.trim();
+  const characterName = parseGlobalCharacterArgs(argsText).trim();
   if (!characterName) {
-    return { ok: false, message: 'Use assim: */rmvpersonagem Nome do Personagem* ou */rmvpersonagem 3 Nome do Personagem*' };
+    return { ok: false, message: 'Use assim: */rmvpersonagem Nome do Personagem*\nAgora esse comando remove o personagem de todos os universos e dos próximos universos criados.' };
   }
 
-  const character = findCharacter(parsed.universeId, characterName);
-  if (!character) return { ok: false, message: `Não encontrei *${characterName}* no Universo ${parsed.universeId}.` };
+  const slug = slugify(characterName);
+  if (!slug) return { ok: false, message: 'Nome de personagem inválido.' };
 
-  const claims = db.prepare('SELECT COUNT(*) AS total FROM character_claims WHERE character_id = ?').get(character.id).total || 0;
-  db.prepare('DELETE FROM characters WHERE id = ?').run(character.id);
+  const existing = db.prepare('SELECT * FROM character_templates WHERE slug = ?').get(slug)
+    || db.prepare('SELECT * FROM characters WHERE slug = ? LIMIT 1').get(slug);
+
+  if (!existing) return { ok: false, message: `Não encontrei *${characterName}* na lista global de personagens.` };
+
+  const affectedUniverses = db.prepare('SELECT COUNT(*) AS total FROM characters WHERE slug = ?').get(slug).total || 0;
+  const claims = db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM character_claims cc
+    JOIN characters c ON c.id = cc.character_id
+    WHERE c.slug = ?
+  `).get(slug).total || 0;
+
+  const transaction = db.transaction(() => {
+    db.prepare('DELETE FROM character_templates WHERE slug = ?').run(slug);
+    db.prepare('DELETE FROM characters WHERE slug = ?').run(slug);
+  });
+
+  transaction();
 
   return {
     ok: true,
     message: [
-      '✅ *Personagem removido da lista!*',
+      '✅ *Personagem removido da lista global!*',
       '',
-      `🌌 Universo: *${parsed.universeId}*`,
-      `👤 Personagem: *${character.name}*`,
+      `👤 Personagem: *${existing.name || characterName}*`,
+      `🌌 Universos alterados: *${affectedUniverses}*`,
       claims > 0 ? `⚠️ Registros removidos junto com o personagem: *${claims}*` : null,
+      '',
+      'Esse personagem também não entrará nos próximos universos criados.',
     ].filter(Boolean).join('\n'),
   };
 }
@@ -382,8 +541,15 @@ function trocarPersonagem(message, argsText = '') {
     return { ok: false, message: 'Você ainda não tem personagem. Use */Registro 2 Nome do Personagem* primeiro.' };
   }
 
-  const characterName = String(argsText || '').trim();
-  if (!characterName) return { ok: false, message: 'Use assim: */trocarpersonagem Nome do Personagem*' };
+  const rawArgs = String(argsText || '').trim();
+  if (!rawArgs) return { ok: false, message: 'Use assim: */trocarpersonagem Nome do Personagem*\nPara bloqueado: */trocarpersonagem Nome do Personagem CÓDIGO*' };
+
+  const parts = rawArgs.split(/\s+/);
+  const possibleCode = parts[parts.length - 1];
+  const hasCode = /^DBV-[A-F0-9]{6}-[A-F0-9]{4}$/i.test(possibleCode);
+  const rescueCode = hasCode ? possibleCode : null;
+  const characterName = hasCode ? parts.slice(0, -1).join(' ').trim() : rawArgs;
+  if (!characterName) return { ok: false, message: 'Informe o nome do personagem.' };
 
   const universeId = Number(claim.universe_id);
   const character = findCharacter(universeId, characterName);
@@ -394,8 +560,26 @@ function trocarPersonagem(message, argsText = '') {
   if (character.id === claim.character_id) return { ok: false, message: `Você já está usando *${character.name}*.` };
 
   const isSupreme = isSupremeRoleId(player.cargo_id);
-  if (!isSupreme && character.is_locked) {
-    return { ok: false, message: `*${character.name}* é bloqueado 🔒 e não pode ser escolhido pelo comando de troca.` };
+
+  // Personagem bloqueado SEMPRE exige código de resgate.
+  // Não existe bypass para admin, Autoridade Suprema, Supremo Ministro ou Alta Cúpula.
+  if (character.is_locked) {
+    const codeResult = consumeRescueCode({
+      code: rescueCode,
+      universeId,
+      characterId: character.id,
+      whatsappId: player.whatsapp_id,
+    });
+
+    if (!codeResult.ok) {
+      return {
+        ok: false,
+        message: `${codeResult.message}
+
+Formato para trocar para personagem bloqueado:
+*/trocarpersonagem ${character.name} CÓDIGO*`,
+      };
+    }
   }
 
   if (!isSupreme) {
@@ -423,6 +607,16 @@ function trocarPersonagem(message, argsText = '') {
           claim_type = ?
       WHERE id = ?
     `).run(character.id, isSupreme ? 'supremo' : 'player', claim.id);
+
+    if (cost > 0) {
+      recordLedger({
+        playerId: player.id,
+        direction: 'saida',
+        category: 'troca_personagem',
+        amount: cost,
+        description: `Troca de personagem: ${claim.character_name} → ${character.name}`,
+      });
+    }
   });
 
   transaction();
