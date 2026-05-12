@@ -1,13 +1,13 @@
-const MANUAL_EVENT_REWARD = 10_000_000;
+const MANUAL_EVENT_REWARD = 50_000_000;
 const MANUAL_DAILY_LIMIT = 10;
-const MANUAL_DAILY_REWARD_LIMIT = 100_000_000;
-const DRAGON_EMOJI_REWARD = 5_000_000;
+const MANUAL_DAILY_REWARD_LIMIT = 500_000_000;
+const DRAGON_EMOJI_REWARD = 50_000_000;
 const DRAGON_EMOJI_DAILY_LIMIT_PER_CHAT = 10;
-const AUTO_QUIZ_REWARD = 25_000_000;
-const AUTO_QUIZ_DAILY_LIMIT_PER_CHAT = 3;
+const AUTO_QUIZ_REWARD = 100_000_000;
+const AUTO_QUIZ_DAILY_LIMIT_PER_CHAT = 10;
 const DRAGON_EMOJI_INTERVAL_MINUTES = 60;
 const ACTIVE_EVENT_EXPIRATION_MINUTES = 50;
-const AUTO_QUIZ_HOURS = [10, 16, 21];
+const AUTO_QUIZ_HOURS = Array.from({ length: 19 }, (_, index) => index + 5);
 
 const quizQuestions = [
   {
@@ -160,6 +160,182 @@ const quizQuestions = [
     options: { A: 'Turles', B: 'Goku Black', C: 'Cumber', D: 'Baby Goku' },
     answer: 'B',
   },
+
+  {
+    question: 'Qual personagem sacrificou a própria vida usando o Makankosappo contra Raditz?',
+    options: { A: 'Piccolo', B: 'Goku', C: 'Kuririn', D: 'Tenshinhan' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual é o nome do planeta natal dos Saiyajins na era de Vegeta?',
+    options: { A: 'Namekusei', B: 'Sadala', C: 'Vegeta', D: 'Yardrat' },
+    answer: 'C',
+  },
+  {
+    question: 'Quem treinou Goku em Yardrat para aprender o teletransporte?',
+    options: { A: 'Whis', B: 'Mestre Kame', C: 'Habitantes de Yardrat', D: 'Senhor Kaioh' },
+    answer: 'C',
+  },
+  {
+    question: 'Qual técnica Vegeta usa como ataque explosivo contra Cell Perfeito?',
+    options: { A: 'Final Flash', B: 'Kamehameha', C: 'Masenko', D: 'Taiyoken' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem derrotou Cell com o Kamehameha Pai e Filho?',
+    options: { A: 'Goku', B: 'Gohan', C: 'Vegeta', D: 'Trunks' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual personagem é conhecido por usar o Masenko ainda criança?',
+    options: { A: 'Goten', B: 'Gohan', C: 'Trunks', D: 'Uub' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual é o nome da fusão de Caulifla e Kale?',
+    options: { A: 'Kefla', B: 'Gogeta', C: 'Vegetto', D: 'Gotenks' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual guerreiro do Universo 6 é aprendiz de Vegeta?',
+    options: { A: 'Hit', B: 'Cabba', C: 'Frost', D: 'Botamo' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual personagem é o irmão gêmeo de Bills?',
+    options: { A: 'Champa', B: 'Belmod', C: 'Rumsshi', D: 'Sidra' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem é a anja assistente de Champa?',
+    options: { A: 'Marcarita', B: 'Vados', C: 'Kusu', D: 'Cognac' },
+    answer: 'B',
+  },
+  {
+    question: 'Quem é o Supremo Kaioshin ligado ao universo de Bills?',
+    options: { A: 'Shin', B: 'Zamasu', C: 'Gowasu', D: 'Kibito' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual vilão rouba o corpo de Goku em Dragon Ball Super?',
+    options: { A: 'Moro', B: 'Zamasu', C: 'Granolah', D: 'Gas' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual personagem usa a técnica Hakai como poder de destruição?',
+    options: { A: 'Hakaishins', B: 'Kaioshins', C: 'Namekuseijins', D: 'Patrulheiros Galácticos' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual vilão de Dragon Ball Super é conhecido por devorar energia e planetas?',
+    options: { A: 'Moro', B: 'Cell', C: 'Freeza', D: 'Baby' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem é o sobrevivente Cerealiano que deseja vingança contra os Saiyajins?',
+    options: { A: 'Gas', B: 'Granolah', C: 'Jiren', D: 'Toppo' },
+    answer: 'B',
+  },
+  {
+    question: 'Quem é um dos membros mais fortes da família Heeter?',
+    options: { A: 'Gas', B: 'Cabba', C: 'Dyspo', D: 'Frost' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual transformação de Freeza aparece em Dragon Ball Super com aparência dourada?',
+    options: { A: 'Black Freeza', B: 'Golden Freeza', C: 'Freeza Perfeito', D: 'Freeza Oozaru' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual personagem usa a técnica Mafuba para selamento?',
+    options: { A: 'Mestre Kame', B: 'Nappa', C: 'Broly', D: 'Janemba' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem foi absorvido por Super Buu para formar Buutenks?',
+    options: { A: 'Vegetto', B: 'Gotenks', C: 'Gohan', D: 'Piccolo apenas' },
+    answer: 'B',
+  },
+  {
+    question: 'Quem foi absorvido por Super Buu para formar Buuhan?',
+    options: { A: 'Gohan', B: 'Goten', C: 'Trunks', D: 'Vegeta' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual personagem é a reencarnação humana bondosa de Kid Buu?',
+    options: { A: 'Uub', B: 'Pan', C: 'Goten', D: 'Cabba' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem é a filha de Gohan e Videl?',
+    options: { A: 'Bra', B: 'Pan', C: 'Marron', D: 'Mai' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual técnica de Tenshinhan cria um ataque triangular de energia?',
+    options: { A: 'Kikoho', B: 'Kamehameha', C: 'Final Flash', D: 'Death Beam' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual personagem é conhecido pelo golpe Yamcha chamado Sokidan?',
+    options: { A: 'Yamcha', B: 'Kuririn', C: 'Piccolo', D: 'Tao Pai Pai' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual item de Bulma é usado para localizar as Esferas do Dragão?',
+    options: { A: 'Radar do Dragão', B: 'Scouter', C: 'Bastão Mágico', D: 'Nuvem Voadora' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual item mágico de Goku cresce conforme sua vontade?',
+    options: { A: 'Bastão Mágico', B: 'Semente dos Deuses', C: 'Scouter', D: 'Radar' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem é o mestre que vive na Torre Karin?',
+    options: { A: 'Karin', B: 'Kami-sama', C: 'Kaioh', D: 'Whis' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem é o guardião da Terra antes de Dende assumir?',
+    options: { A: 'Kami-sama', B: 'Piccolo Daimaoh', C: 'Mestre Kame', D: 'Senhor Kaioh' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual Namekuseijin assume como novo guardião da Terra?',
+    options: { A: 'Nail', B: 'Dende', C: 'Cargo', D: 'Moori' },
+    answer: 'B',
+  },
+  {
+    question: 'Quem é o pai de Trunks do Futuro?',
+    options: { A: 'Goku', B: 'Vegeta', C: 'Gohan', D: 'Yamcha' },
+    answer: 'B',
+  },
+  {
+    question: 'Qual personagem corta a espada Z ao testar sua resistência?',
+    options: { A: 'Gohan', B: 'Bills', C: 'Goku', D: 'Kaioh' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual entidade aparece ao quebrar a Espada Z?',
+    options: { A: 'Velho Kaioshin', B: 'Shenlong', C: 'Porunga', D: 'Zeno' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem é o rei de todos os universos em Dragon Ball Super?',
+    options: { A: 'Zeno', B: 'Daishinkan', C: 'Bills', D: 'Gowasu' },
+    answer: 'A',
+  },
+  {
+    question: 'Quem é o Grande Sacerdote, pai dos anjos?',
+    options: { A: 'Daishinkan', B: 'Zeno', C: 'Whis', D: 'Gowasu' },
+    answer: 'A',
+  },
+  {
+    question: 'Qual luta popularizou o Instinto Superior de Goku no Torneio do Poder?',
+    options: { A: 'Goku contra Jiren', B: 'Vegeta contra Cabba', C: 'Gohan contra Cell', D: 'Freeza contra Frost' },
+    answer: 'A',
+  },
 ];
 
 const hangmanWords = [
@@ -178,6 +354,42 @@ const hangmanWords = [
   { word: 'KAIOKEN', hint: 'Técnica ensinada pelo Senhor Kaioh.' },
   { word: 'JIREN', hint: 'Guerreiro poderoso do Universo 11.' },
   { word: 'HIT', hint: 'Assassino do Universo 6 que usa salto temporal.' },
+
+  { word: 'FINAL FLASH', hint: 'Ataque poderoso usado por Vegeta.' },
+  { word: 'MAKANKOSAPPO', hint: 'Técnica perfurante de Piccolo.' },
+  { word: 'KIENZAN', hint: 'Disco cortante usado por Kuririn.' },
+  { word: 'TAIYOKEN', hint: 'Golpe de luz usado para cegar o adversário.' },
+  { word: 'MASENKO', hint: 'Técnica de energia usada por Gohan.' },
+  { word: 'GALICK HO', hint: 'Ataque clássico de Vegeta.' },
+  { word: 'BIG BANG ATTACK', hint: 'Explosão de energia associada a Vegeta.' },
+  { word: 'TELETRANSPORTE', hint: 'Técnica aprendida em Yardrat.' },
+  { word: 'YARDRAT', hint: 'Planeta ligado ao teletransporte de Goku.' },
+  { word: 'SADALA', hint: 'Planeta ligado à origem dos Saiyajins.' },
+  { word: 'PLANETA VEGETA', hint: 'Planeta dos Saiyajins na era do rei Vegeta.' },
+  { word: 'TORNEIO DO PODER', hint: 'Competição entre universos.' },
+  { word: 'INSTINTO SUPERIOR', hint: 'Estado em que o corpo reage sozinho.' },
+  { word: 'SUPER SAIYAJIN BLUE', hint: 'Forma divina de cabelo azul.' },
+  { word: 'GOLDEN FREEZA', hint: 'Transformação dourada de Freeza.' },
+  { word: 'GOKU BLACK', hint: 'Inimigo ligado a Zamasu.' },
+  { word: 'ZAMASU', hint: 'Kaioshin aprendiz corrompido.' },
+  { word: 'MORO', hint: 'Vilão devorador de energia.' },
+  { word: 'GRANOLAH', hint: 'Sobrevivente Cerealiano.' },
+  { word: 'GAS', hint: 'Membro poderoso dos Heeter.' },
+  { word: 'KEFLA', hint: 'Fusão de Caulifla e Kale.' },
+  { word: 'VEGETTO', hint: 'Fusão Potara de Goku e Vegeta.' },
+  { word: 'GOGETA', hint: 'Fusão por dança de Goku e Vegeta.' },
+  { word: 'GOTENKS', hint: 'Fusão de Goten e Trunks.' },
+  { word: 'PORUNGA', hint: 'Dragão das Esferas de Namekusei.' },
+  { word: 'SHENLONG', hint: 'Dragão invocado pelas Esferas da Terra.' },
+  { word: 'RADAR DO DRAGAO', hint: 'Aparelho de Bulma para encontrar esferas.' },
+  { word: 'BASTAO MAGICO', hint: 'Arma clássica de Goku criança.' },
+  { word: 'NUVEM VOADORA', hint: 'Meio de transporte mágico usado por Goku.' },
+  { word: 'SEMENTE DOS DEUSES', hint: 'Item que restaura energia e ferimentos.' },
+  { word: 'HAKAI', hint: 'Poder de destruição dos Hakaishins.' },
+  { word: 'MAFUBA', hint: 'Técnica de selamento.' },
+  { word: 'BUUHAN', hint: 'Super Buu após absorver Gohan.' },
+  { word: 'BUUTENKS', hint: 'Super Buu após absorver Gotenks.' },
+  { word: 'UUB', hint: 'Reencarnação humana bondosa de Kid Buu.' },
 ];
 
 const quickChallenges = [

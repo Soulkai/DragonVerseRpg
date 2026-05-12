@@ -6,6 +6,7 @@ const { money } = require('../utils/format');
 const { parseAmount } = require('../utils/numbers');
 const { grantZenies } = require('./rewardService');
 const { recordLedger } = require('./ledgerService');
+const { chargePlayerWithDebt } = require('./debtService');
 const { registerPresence, formatStreakStatus, localDateKey } = require('./streakService');
 const { createDailyBountyForChat, formatBounty } = require('./bountyService');
 const {
@@ -33,15 +34,19 @@ const MANUAL_TYPES = ['manual_quiz', 'hangman', 'quick_challenge'];
 const TIGRINHO_DAILY_LIMIT = 3;
 const TIGRINHO_MIN_BET = 1_000_000;
 const TIGRINHO_SYMBOLS = [
-  { emoji: '🐉', name: 'Dragão', weight: 18, payouts: { 3: 5, 6: 25, 9: 100 } },
-  { emoji: '🐯', name: 'Tigre', weight: 16, payouts: { 3: 3, 6: 7, 9: 15 } },
-  { emoji: '🦍', name: 'Gorila', weight: 14, payouts: { 3: 4, 6: 8, 9: 20 } },
-  { emoji: '💎', name: 'Diamante', weight: 10, payouts: { 3: 5, 6: 10, 9: 25 } },
-  { emoji: '⭐', name: 'Estrela', weight: 14, payouts: { 3: 2, 6: 4, 9: 8 } },
-  { emoji: '🔥', name: 'Fogo', weight: 12, payouts: { 3: 2, 6: 4, 9: 8 } },
-  { emoji: '🍀', name: 'Trevo', weight: 10, payouts: { 3: 2, 6: 5, 9: 12 } },
-  { emoji: '🪙', name: 'Moeda', weight: 10, payouts: { 3: 2, 6: 3, 9: 6 } },
-  { emoji: '💩', name: 'Coco', weight: 8, payouts: null },
+  // Quanto maior o prêmio, menor a chance real do símbolo aparecer.
+  { emoji: '💎', name: 'Diamante', weight: 1, payouts: { 3: 5, 6: 10, 9: 25 } },
+  { emoji: '🦍', name: 'Gorila', weight: 2, payouts: { 3: 4, 6: 8, 9: 20 } },
+  { emoji: '🐯', name: 'Tigre', weight: 3, payouts: { 3: 3, 6: 7, 9: 15 } },
+  { emoji: '🐉', name: 'Dragão', weight: 4, payouts: { 3: 2, 6: 5, 9: 10 } },
+  { emoji: '🍀', name: 'Trevo', weight: 6, payouts: { 3: 2, 6: 5, 9: 12 } },
+  { emoji: '⭐', name: 'Estrela', weight: 12, payouts: { 3: 1, 6: 3, 9: 6 } },
+  { emoji: '🔥', name: 'Fogo', weight: 14, payouts: { 3: 1, 6: 3, 9: 6 } },
+  { emoji: '🪙', name: 'Moeda', weight: 18, payouts: { 3: 1, 6: 2, 9: 4 } },
+  { emoji: '🍌', name: 'Banana', weight: 22, payouts: null },
+  { emoji: '🍜', name: 'Lámen', weight: 22, payouts: null },
+  { emoji: '🪨', name: 'Pedra', weight: 24, payouts: null },
+  { emoji: '💩', name: 'Coco', weight: 14, payouts: null },
 ];
 
 
@@ -71,6 +76,7 @@ function getDateParts(date = new Date()) {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
+    hourCycle: 'h23',
     hour12: false,
   });
 
@@ -83,6 +89,11 @@ function getDateParts(date = new Date()) {
 
 function dateKey() {
   return getDateParts().dateKey;
+}
+
+function isAutoEventAllowedTime() {
+  const { hour } = getDateParts();
+  return hour >= 5 && hour < 24;
 }
 
 function cleanAnswer(input = '') {
@@ -432,8 +443,9 @@ function eventList(message) {
       `Limite: *${TIGRINHO_DAILY_LIMIT} apostas por dia*.`,
       '',
       '🐲 *Eventos automáticos do grupo*',
+      'Horário: *05:00 até 00:00*. Fora desse horário o bot não solta automáticos.',
       `Emoji do dragão: a cada hora, até *${DRAGON_EMOJI_DAILY_LIMIT_PER_CHAT} por dia*. Primeiro */pegar* ganha *${money(DRAGON_EMOJI_REWARD)} Zenies*.`,
-      `Pergunta relâmpago: *${AUTO_QUIZ_DAILY_LIMIT_PER_CHAT} vezes por dia*. Primeiro acerto ganha *${money(AUTO_QUIZ_REWARD)} Zenies*.`,
+      `Pergunta relâmpago: até *${AUTO_QUIZ_DAILY_LIMIT_PER_CHAT} por dia*. Cada pessoa tenta responder só *1 vez*. Primeiro acerto ganha *${money(AUTO_QUIZ_REWARD)} Zenies*.`,
       '🎯 Caça-cabeça: o bot sorteia um habitante do universo por dia.',
       '',
       '⚙️ *Admin:*',
@@ -653,14 +665,42 @@ function answerAutoQuiz(message, answerRaw) {
   const answer = cleanAnswer(answerRaw);
   if (!answer) return null;
 
-  if (answer !== String(active.answer || '').toUpperCase()) {
+  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  const state = parseState(active);
+  state.attemptedPlayerIds = Array.isArray(state.attemptedPlayerIds) ? state.attemptedPlayerIds : [];
+  state.attemptedPlayerIds = state.attemptedPlayerIds.map((id) => Number(id));
+
+  if (state.attemptedPlayerIds.includes(Number(player.id))) {
     return {
       ok: false,
-      message: '❌ Resposta errada para a pergunta relâmpago. Ela continua aberta até alguém acertar.',
+      message: [
+        '⛔ *Tentativa já usada.*',
+        '',
+        `${mentionPlayer(player)}, você já tentou responder essa pergunta relâmpago.`,
+        'Agora outra pessoa precisa tentar.',
+      ].join('\n'),
+      mentions: [player.whatsapp_id],
     };
   }
 
-  const player = getOrCreatePlayerFromMessage(message, { touch: true });
+  if (answer !== String(active.answer || '').toUpperCase()) {
+    state.attemptedPlayerIds.push(Number(player.id));
+    state.wrongAttempts = Number(state.wrongAttempts || 0) + 1;
+    updateEventState(active.id, state);
+
+    return {
+      ok: false,
+      message: [
+        '❌ *Resposta errada.*',
+        '',
+        `${mentionPlayer(player)} tentou e errou.`,
+        'Essa pessoa não pode tentar de novo nessa pergunta.',
+        'A pergunta continua aberta para outro player responder.',
+      ].join('\n'),
+      mentions: [player.whatsapp_id],
+    };
+  }
+
   ensurePlayerDailyStats(player.id);
   rewardAutoQuiz(player.id);
   finishEvent(active.id, 'finished', player.id);
@@ -815,6 +855,8 @@ function pegar(message) {
 }
 
 function shouldSendEmoji(chat) {
+  if (!isAutoEventAllowedTime()) return false;
+
   const stats = ensureChatDailyStats(chat.chat_id);
   if (Number(stats.emoji_sent || 0) >= DRAGON_EMOJI_DAILY_LIMIT_PER_CHAT) return false;
   if (getActiveChatEvent(chat.chat_id, 'dragon_emoji')) return false;
@@ -827,6 +869,8 @@ function shouldSendEmoji(chat) {
 }
 
 function shouldSendAutoQuiz(chat) {
+  if (!isAutoEventAllowedTime()) return false;
+
   const stats = ensureChatDailyStats(chat.chat_id);
   if (Number(stats.auto_quiz_sent || 0) >= AUTO_QUIZ_DAILY_LIMIT_PER_CHAT) return false;
   if (getActiveChatEvent(chat.chat_id, 'auto_quiz')) return false;
@@ -838,7 +882,7 @@ function shouldSendAutoQuiz(chat) {
   const last = new Date(chat.last_auto_quiz_at).getTime();
   if (!Number.isFinite(last)) return true;
 
-  return Date.now() - last >= 4 * 60 * 60 * 1000;
+  return Date.now() - last >= 60 * 60 * 1000;
 }
 
 function markEmojiSent(chatId) {
@@ -910,6 +954,7 @@ async function sendAutoQuizEvent(client, chatId) {
     formatQuestion(question, 'Pergunta Relâmpago'),
     '',
     `⚡ O primeiro que acertar ganha *${money(AUTO_QUIZ_REWARD)} Zenies*!`,
+    'Cada player só pode tentar responder *1 vez* nessa pergunta.',
   ].join('\n'));
 }
 
@@ -1043,52 +1088,35 @@ function tigrinho(message, argsText = '') {
     resultText = `Você ganhou *${prize.multiplier}x* o valor apostado.`;
   }
 
-  const availableAfterBet = Math.max(0, Number(player.zenies || 0) - bet);
-  const appliedExtraPenalty = Math.min(availableAfterBet, extraPenalty);
-  const totalLoss = bet + appliedExtraPenalty;
+  const totalLoss = prize.isPenalty ? bet * 2 : bet;
 
-  const transaction = db.transaction(() => {
-    db.prepare(`
-      UPDATE players
-      SET zenies = MAX(zenies - ?, 0) + ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(totalLoss, reward, player.id);
-
-    db.prepare(`
-      UPDATE event_daily_stats
-      SET slot_plays = slot_plays + 1,
-          slot_bet_total = slot_bet_total + ?,
-          slot_reward_total = slot_reward_total + ?,
-          slot_loss_total = slot_loss_total + ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE player_id = ? AND date_key = ?
-    `).run(bet, reward, totalLoss, player.id, dateKey());
+  const chargeResult = chargePlayerWithDebt(player.id, totalLoss, {
+    allowNegative: Boolean(prize.isPenalty),
+    drainDeposit: Boolean(prize.isPenalty),
+    category: 'tigrinho_aposta',
+    description: prize.isPenalty ? 'Tigrinho — coco/punição' : 'Tigrinho — aposta perdida',
   });
 
-  transaction();
-  if (totalLoss > 0) {
-    recordLedger({
-      playerId: player.id,
-      direction: 'perda',
-      category: 'tigrinho_aposta',
-      amount: totalLoss,
-      description: prize.isPenalty ? 'Tigrinho — perda com punição' : 'Tigrinho — aposta perdida',
-    });
-  }
-  if (reward > 0) {
-    recordLedger({
-      playerId: player.id,
-      direction: 'entrada',
-      category: 'tigrinho',
-      amount: reward,
-      description: 'Prêmio do Tigrinho',
-    });
-    const { applyReferralBonus } = require('./rewardService');
-    applyReferralBonus(player.id, reward, 'tigrinho');
+  if (!chargeResult.ok) {
+    return { ok: false, message: chargeResult.message || 'Não foi possível cobrar a aposta.' };
   }
 
-  const updated = db.prepare('SELECT zenies FROM players WHERE id = ?').get(player.id);
+  if (reward > 0) {
+    const { grantZenies } = require('./rewardService');
+    grantZenies(player.id, reward, 'tigrinho', { description: 'Prêmio do Tigrinho' });
+  }
+
+  db.prepare(`
+    UPDATE event_daily_stats
+    SET slot_plays = slot_plays + 1,
+        slot_bet_total = slot_bet_total + ?,
+        slot_reward_total = slot_reward_total + ?,
+        slot_loss_total = slot_loss_total + ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE player_id = ? AND date_key = ?
+  `).run(bet, reward, totalLoss, player.id, dateKey());
+
+  const updated = db.prepare('SELECT zenies, deposito FROM players WHERE id = ?').get(player.id);
   const newStats = ensurePlayerDailyStats(player.id);
 
   return {
@@ -1105,9 +1133,13 @@ function tigrinho(message, argsText = '') {
       prize.multiplier > 0 ? `🎯 Melhor combinação: *${prize.threshold} ${prize.symbol} ${prize.name}*` : null,
       `🎲 Aposta: *${money(bet)} Zenies*`,
       reward > 0 ? `🏆 Prêmio: *${money(reward)} Zenies*` : null,
-      appliedExtraPenalty > 0 ? `💀 Punição extra: *${money(appliedExtraPenalty)} Zenies*` : null,
+      prize.isPenalty ? `💀 Perda total pelo coco: *${money(totalLoss)} Zenies*` : null,
+      chargeResult.usedDeposit > 0 ? `🏦 Retirado da poupança: *${money(chargeResult.usedDeposit)} Zenies*` : null,
+      chargeResult.negativeAdded > 0 ? `📉 Saldo negativo gerado: *${money(chargeResult.negativeAdded)} Zenies*` : null,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
+      `🏦 Poupança atual: *${money(updated.deposito || 0)} Zenies*`,
       `📊 Apostas hoje: *${newStats.slot_plays}/${TIGRINHO_DAILY_LIMIT}*`,
+      chargeResult.prompt || null,
     ].filter(Boolean).join('\n'),
   };
 }

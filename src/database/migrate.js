@@ -406,6 +406,23 @@ function createDragonVerseExtraTables() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS player_loans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      principal INTEGER NOT NULL DEFAULT 0,
+      current_debt INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      last_accrual_at TEXT,
+      accepted_at TEXT,
+      paid_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_player_loans_lookup
+    ON player_loans(player_id, status);
+
     CREATE TABLE IF NOT EXISTS economy_ledger (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       player_id INTEGER NOT NULL,
@@ -873,3 +890,30 @@ function createUniverseWithCharacters(universeId, name = null, welcomeText = nul
 }
 
 module.exports = { migrate, createUniverseWithCharacters };
+
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS universe_travel (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  player_id INTEGER,
+  from_universe INTEGER,
+  to_universe INTEGER,
+  start_time TEXT,
+  end_time TEXT
+);
+
+CREATE TABLE IF NOT EXISTS universe_links (
+  universe_id INTEGER PRIMARY KEY,
+  created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS muted_users (
+  user_id TEXT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS blocked_commands (
+  chat_id TEXT,
+  command TEXT,
+  PRIMARY KEY(chat_id, command)
+);
+`);

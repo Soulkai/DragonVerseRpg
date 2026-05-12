@@ -5,6 +5,7 @@ const { parseAmount, parseInteger } = require('../utils/numbers');
 const { money, formatKiLevel, formatDateTime, getNextDepositInterestAt, balanceCaption } = require('../utils/format');
 const { grantZenies } = require('./rewardService');
 const { recordLedger } = require('./ledgerService');
+const { chargePlayerWithDebt, accrueLoanInterest } = require('./debtService');
 const {
   DAY_MS,
   SALARY_INTERVAL_DAYS,
@@ -103,36 +104,29 @@ async function retirarZenies(message, argsText) {
   }
 
   const target = getOrCreatePlayerByWhatsAppId(targetWhatsappId, null, { touch: false });
-  const discount = Math.min(Number(target.zenies || 0), amount);
-
-  db.prepare(`
-    UPDATE players
-    SET zenies = MAX(zenies - ?, 0),
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(amount, target.id);
+  const charge = chargePlayerWithDebt(target.id, amount, {
+    allowNegative: true,
+    drainDeposit: true,
+    category: 'retirarzenies',
+    description: 'Multa aplicada por ADM',
+  });
 
   const updated = getPlayerByWhatsAppId(targetWhatsappId);
-  if (discount > 0) {
-    recordLedger({
-      playerId: updated.id,
-      direction: 'perda',
-      category: 'retirarzenies',
-      amount: discount,
-      description: 'Zenies retirados por ADM',
-    });
-  }
 
   return {
     ok: true,
     message: [
-      '✅ *Zenies retirados!*',
+      '✅ *Multa aplicada / Zenies retirados!*',
       '',
       `👤 Jogador: ${mentionPlayer(updated)}`,
-      `➖ Valor solicitado: *${money(amount)} Zenies*`,
-      `💸 Valor retirado: *${money(discount)} Zenies*`,
+      `➖ Valor da multa: *${money(amount)} Zenies*`,
+      `💸 Retirado dos Zenies: *${money(charge.usedZenies || 0)} Zenies*`,
+      charge.usedDeposit > 0 ? `🏦 Retirado da poupança: *${money(charge.usedDeposit)} Zenies*` : null,
+      charge.negativeAdded > 0 ? `📉 Saldo negativo gerado: *${money(charge.negativeAdded)} Zenies*` : null,
       `💰 Saldo atual: *${money(updated.zenies)} Zenies*`,
-    ].join('\n'),
+      `🏦 Poupança atual: *${money(updated.deposito || 0)} Zenies*`,
+      charge.prompt || null,
+    ].filter(Boolean).join('\n'),
     mentions: mentionIds(updated),
   };
 }
@@ -453,7 +447,8 @@ function applyDueDepositInterest() {
 function runEconomyMaintenance() {
   const salary = applyDueSalaries();
   const interest = applyDueDepositInterest();
-  return { salary, interest };
+  const loans = accrueLoanInterest();
+  return { salary, interest, loans };
 }
 
 module.exports = {

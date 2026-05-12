@@ -7,6 +7,8 @@ const { grantZenies } = require('./rewardService');
 const { recordLedger } = require('./ledgerService');
 
 const BOX_DAILY_LIMIT = 10;
+const BOX_COLLECTIBLE_CHANCE = 0.65;
+const NINE_COLLECTIBLE_OVERALL_CHANCE_PERCENT = 0.0001;
 
 const BOXES = [
   { id: '10kk', label: 'Caixa 10kk', price: 10_000_000 },
@@ -44,14 +46,51 @@ function addKi(playerId, amount, maxKi = 10) {
   `).run(amount, maxKi, playerId);
 }
 
-function weightedCollectible() {
-  const total = COLLECTIBLES.reduce((sum, item) => sum + item.weight, 0);
-  let roll = Math.random() * total;
-  for (const item of COLLECTIBLES) {
-    roll -= item.weight;
+function getPlayerCollectibleQuantities(playerId) {
+  const rows = db.prepare(`
+    SELECT collectible_id, quantity
+    FROM player_collectibles
+    WHERE player_id = ?
+  `).all(playerId);
+
+  return rows.reduce((acc, row) => {
+    acc[row.collectible_id] = Number(row.quantity || 0);
+    return acc;
+  }, {});
+}
+
+function weightedCollectible(playerId) {
+  const quantities = getPlayerCollectibleQuantities(playerId);
+  const protectedCollectibles = COLLECTIBLES.filter((item) => Number(quantities[item.id] || 0) >= 9);
+  const normalCollectibles = COLLECTIBLES.filter((item) => Number(quantities[item.id] || 0) < 9);
+
+  // Quando um colecionável está em 9/10, ele fica quase impossível:
+  // 0,0001% de chance por abertura de caixa.
+  // Como o sorteio de colecionável acontece em 65% das caixas, convertemos
+  // essa chance total para uma chance condicional dentro do sorteio de colecionável.
+  const protectedConditionalPercent = NINE_COLLECTIBLE_OVERALL_CHANCE_PERCENT / BOX_COLLECTIBLE_CHANCE;
+  let roll = Math.random() * 100;
+
+  for (const item of protectedCollectibles) {
+    roll -= protectedConditionalPercent;
     if (roll <= 0) return item;
   }
-  return COLLECTIBLES[0];
+
+  if (normalCollectibles.length === 0) {
+    return null;
+  }
+
+  const reservedPercent = protectedCollectibles.length * protectedConditionalPercent;
+  const normalPercentPool = Math.max(0, 100 - reservedPercent);
+  const normalTotalWeight = normalCollectibles.reduce((sum, item) => sum + item.weight, 0);
+
+  let weightedRoll = Math.random() * normalTotalWeight;
+  for (const item of normalCollectibles) {
+    weightedRoll -= item.weight;
+    if (weightedRoll <= 0) return item;
+  }
+
+  return normalCollectibles[0];
 }
 
 function findBox(input = '') {
@@ -154,6 +193,7 @@ function listBoxes(message) {
       '▢   ⤷ 2,5% → 2,5x até 3x.',
       '▢   ⤷ 0,5% → 3x até 4x.',
       '▢ • Também pode vir colecionável. Ao juntar 10, o prêmio é ativado automaticamente.',
+      '▢ • Quando um colecionável estiver em *9/10*, ele passa a ter apenas *0,0001%* de chance por caixa.',
       '▢',
       '╰━━─「🎁」─━━',
       '',
@@ -190,7 +230,7 @@ function openBox(message, argsText = '') {
 
   const rewardRoll = randomMoney(box.price);
   const moneyReward = rewardRoll.amount;
-  const collectible = Math.random() < 0.65 ? weightedCollectible() : null;
+  const collectible = Math.random() < BOX_COLLECTIBLE_CHANCE ? weightedCollectible(player.id) : null;
   let completionText = null;
 
   db.transaction(() => {
@@ -275,6 +315,8 @@ function caixa(message, argsText = '') {
 
 module.exports = {
   BOX_DAILY_LIMIT,
+  BOX_COLLECTIBLE_CHANCE,
+  NINE_COLLECTIBLE_OVERALL_CHANCE_PERCENT,
   BOXES,
   COLLECTIBLES,
   caixa,

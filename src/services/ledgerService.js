@@ -31,6 +31,8 @@ const CATEGORY_LABELS = {
   caixa: 'Recompensa de caixa',
   tigrinho_aposta: 'Tigrinho',
   tigrinho: 'Tigrinho',
+  emprestimo: 'Empréstimo recebido',
+  emprestimo_pagamento: 'Pagamento de empréstimo',
   jogos_cartas_aposta: 'Aposta em jogo de cartas',
   jogos_cartas: 'Jogo de cartas',
   torneio_inscricao: 'Inscrição em torneio',

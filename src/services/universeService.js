@@ -34,7 +34,7 @@ async function addUniverso(message, argsText) {
       '✅ *Novo universo criado!*',
       '',
       `🌌 Universo: *${universeId}*`,
-      '📜 Lista de personagens criada limpa, sem ocupados.',
+      '📜 Lista de personagens criada com o modelo global atual, sem ocupados.',
       '🔒 Personagens lendários continuam bloqueados por código de resgate.',
       '',
       `Use */Personagens ${universeId}* para ver a lista.`,

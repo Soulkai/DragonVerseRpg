@@ -36,6 +36,11 @@ async function registrarVencedorRankedCommand(message, command, client) {
   await replyWithMentions(message, result, client);
 }
 
+async function removerRankCommand(message, command, client) {
+  const result = await ranked.removeRankedPlayer(message, command.argsText);
+  await replyWithMentions(message, result, client);
+}
+
 module.exports = {
   rankeadaCommand,
   listaRankCommand,
@@ -44,4 +49,5 @@ module.exports = {
   aceitarDesafioCommand,
   recusarDesafioCommand,
   registrarVencedorRankedCommand,
+  removerRankCommand,
 };

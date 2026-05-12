@@ -32,10 +32,11 @@ const { touchPlayerActivity } = require('./services/playerService');
 const { runAutoEvents } = require('./services/eventService');
 const { gerarTorneioCommand, inscreverTorneioCommand, torneioCommand, vencedorTorneioCommand } = require('./commands/torneio');
 const { playersListCommand, deletePlayerCommand } = require('./commands/playerAdmin');
-const { rankeadaCommand, listaRankCommand, iRankCommand, desafioCommand, aceitarDesafioCommand, recusarDesafioCommand, registrarVencedorRankedCommand } = require('./commands/ranked');
+const { rankeadaCommand, listaRankCommand, iRankCommand, desafioCommand, aceitarDesafioCommand, recusarDesafioCommand, registrarVencedorRankedCommand, removerRankCommand } = require('./commands/ranked');
 const { zMarketCommand, zBuyCommand } = require('./commands/zMarket');
 const { inspecionarCommand } = require('./commands/inspecionar');
 const { extratoCommand } = require('./commands/extrato');
+const { emprestimoCommand } = require('./commands/emprestimo');
 
 migrate();
 
@@ -105,6 +106,31 @@ client.on('message', async (message) => {
     touchPlayerActivity(message);
 
     switch (command.name) {
+
+case 'linkar':
+  await linkarCommand(message, command);
+  break;
+
+case 'viajar':
+  await viajarCommand(message, command);
+  break;
+
+case 'mute':
+  await muteCommand(message, command);
+  break;
+
+case 'unmute':
+  await unmuteCommand(message, command);
+  break;
+
+case 'blockcmd':
+  await blockCmdCommand(message, command);
+  break;
+
+case 'unblockcmd':
+  await unblockCmdCommand(message, command);
+  break;
+
       case 'registro':
         await registroCommand(message, command);
         break;
@@ -220,6 +246,12 @@ client.on('message', async (message) => {
         await extratoCommand(message, command, client);
         break;
 
+      case 'emprestimo':
+      case 'empréstimo':
+      case 'loan':
+        await emprestimoCommand(message, command, client);
+        break;
+
       case 'transferir':
         await message.reply('Esse comando mudou para */pix @pessoa valor*.');
         break;
@@ -285,6 +317,11 @@ client.on('message', async (message) => {
 
       case 'rv':
         await registrarVencedorRankedCommand(message, command, client);
+        break;
+
+      case 'removerrank':
+      case 'remover rank':
+        await removerRankCommand(message, command, client);
         break;
 
       case 'zmarket':
@@ -454,3 +491,9 @@ client.on('message', async (message) => {
 });
 
 client.initialize();
+
+
+const { linkarCommand, viajarCommand } = require('./commands/travel');
+const { muteCommand, unmuteCommand } = require('./commands/mute');
+const { blockCmdCommand, unblockCmdCommand } = require('./commands/blockcmd');
+

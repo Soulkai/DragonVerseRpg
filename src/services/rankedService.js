@@ -18,6 +18,29 @@ const ACCEPT_HOURS = 5;
 const FIGHT_HOURS = 24;
 const WIN_COOLDOWN_HOURS = 1;
 const LOSE_COOLDOWN_HOURS = 3;
+const RANKED_TIMEZONE = 'America/Campo_Grande';
+const CHALLENGE_START_HOUR = 6;
+const CHALLENGE_END_HOUR = 22;
+const WO_PAUSE_START_HOUR = 23;
+const WO_PAUSE_END_HOUR = 6;
+
+const PR_POINTS = {
+  winDefault: 2,
+  winVsHigher10: 5,
+  winVsLower10: 1,
+  loss: 1,
+  woWin: 1,
+  woLoss: -3,
+};
+
+const PC_POINTS = {
+  winDefault: 15,
+  winVsHigher10: 20,
+  winVsLower10: 5,
+  loss: 5,
+  woWin: 5,
+  woLoss: -3,
+};
 
 function dateKey() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Campo_Grande' });
@@ -27,6 +50,148 @@ function seasonKey() {
   const now = new Date();
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Campo_Grande', year: 'numeric', month: '2-digit' });
   return fmt.format(now);
+}
+
+function getRankedLocalParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: RANKED_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    second: Number(map.second),
+  };
+}
+
+function localPartsToUtcDate(parts) {
+  const desiredLocalMs = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour || 0,
+    parts.minute || 0,
+    parts.second || 0
+  );
+
+  let guess = new Date(desiredLocalMs);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const actualParts = getRankedLocalParts(guess);
+    const actualLocalMs = Date.UTC(
+      actualParts.year,
+      actualParts.month - 1,
+      actualParts.day,
+      actualParts.hour,
+      actualParts.minute,
+      actualParts.second
+    );
+
+    const diff = desiredLocalMs - actualLocalMs;
+    if (diff === 0) return guess;
+    guess = new Date(guess.getTime() + diff);
+  }
+
+  return guess;
+}
+
+function addLocalDays(parts, amount) {
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + amount, 12, 0, 0));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function sqliteTimestamp(date) {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function rankedDateTimeText(date) {
+  return new Date(date).toLocaleString('pt-BR', { timeZone: RANKED_TIMEZONE });
+}
+
+function isChallengeWindowOpen(date = new Date()) {
+  const parts = getRankedLocalParts(date);
+  const minutes = parts.hour * 60 + parts.minute;
+  const start = CHALLENGE_START_HOUR * 60;
+  const end = CHALLENGE_END_HOUR * 60;
+  return minutes >= start && minutes <= end;
+}
+
+function isWoPauseTime(date = new Date()) {
+  const parts = getRankedLocalParts(date);
+  const minutes = parts.hour * 60 + parts.minute;
+  return minutes >= WO_PAUSE_START_HOUR * 60 || minutes < WO_PAUSE_END_HOUR * 60;
+}
+
+function moveToNextWoActiveTime(date) {
+  if (!isWoPauseTime(date)) return new Date(date.getTime());
+
+  const parts = getRankedLocalParts(date);
+  if (parts.hour >= WO_PAUSE_START_HOUR) {
+    const nextDay = addLocalDays(parts, 1);
+    return localPartsToUtcDate({ ...nextDay, hour: WO_PAUSE_END_HOUR, minute: 0, second: 0 });
+  }
+
+  return localPartsToUtcDate({
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: WO_PAUSE_END_HOUR,
+    minute: 0,
+    second: 0,
+  });
+}
+
+function nextWoPauseStart(date) {
+  const parts = getRankedLocalParts(date);
+  return localPartsToUtcDate({
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: WO_PAUSE_START_HOUR,
+    minute: 0,
+    second: 0,
+  });
+}
+
+function addWoActiveHours(startDate, hours) {
+  let current = moveToNextWoActiveTime(startDate);
+  let remainingMinutes = Math.round(hours * 60);
+
+  while (remainingMinutes > 0) {
+    current = moveToNextWoActiveTime(current);
+
+    const pauseStart = nextWoPauseStart(current);
+    const availableMinutes = Math.max(0, Math.floor((pauseStart.getTime() - current.getTime()) / 60_000));
+
+    if (availableMinutes <= 0) {
+      current = moveToNextWoActiveTime(new Date(current.getTime() + 60_000));
+      continue;
+    }
+
+    const consumed = Math.min(remainingMinutes, availableMinutes);
+    current = new Date(current.getTime() + consumed * 60_000);
+    remainingMinutes -= consumed;
+  }
+
+  return current;
+}
+
+function rankedDeadlineSql(hours) {
+  return sqliteTimestamp(addWoActiveHours(new Date(), hours));
 }
 
 function ensureSeason() {
@@ -129,7 +294,7 @@ function cooldownStatus(playerId) {
     blocked: true,
     winner: isWinner,
     until,
-    message: `Você está em espera por ter ${isWinner ? 'vencido' : 'perdido'} uma luta. Libera em *${new Date(until).toLocaleString('pt-BR', { timeZone: 'America/Campo_Grande' })}*.`
+    message: `Você está em espera por ter ${isWinner ? 'vencido' : 'perdido'} uma luta. Libera em *${rankedDateTimeText(until)}*.`
   };
 }
 
@@ -178,9 +343,9 @@ function ensureNoExpiredChallenges() {
     db.transaction(() => {
       db.prepare(`
         UPDATE ranked_profiles
-        SET pr = MAX(pr - 3, 0), wo_losses = wo_losses + 1, updated_at = CURRENT_TIMESTAMP
+        SET pr = MAX(pr + ?, 0), pc = MAX(pc + ?, 0), wo_losses = wo_losses + 1, updated_at = CURRENT_TIMESTAMP
         WHERE player_id IN (?, ?)
-      `).run(fight.challenger_id, fight.challenged_id);
+      `).run(PR_POINTS.woLoss, PC_POINTS.woLoss, fight.challenger_id, fight.challenged_id);
       db.prepare(`
         UPDATE ranked_fights
         SET status = 'wo_completed', result_type = 'duplo_wo', finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
@@ -190,31 +355,40 @@ function ensureNoExpiredChallenges() {
   }
 }
 
-function calculateWinPoints(winnerBefore, loserBefore) {
+function calculateWinPrPoints(winnerBefore, loserBefore) {
   const diff = Number(loserBefore.pr || 0) - Number(winnerBefore.pr || 0);
-  if (diff >= 10) return 5; // venceu alguém 10+ PR acima
-  if (diff <= -10) return 1; // venceu alguém 10+ PR abaixo
-  return 2;
+  if (diff >= 10) return PR_POINTS.winVsHigher10; // venceu alguém 10+ PR acima
+  if (diff <= -10) return PR_POINTS.winVsLower10; // venceu alguém 10+ PR abaixo
+  return PR_POINTS.winDefault;
+}
+
+function calculateWinPcPoints(winnerBefore, loserBefore) {
+  const diff = Number(loserBefore.pr || 0) - Number(winnerBefore.pr || 0);
+  if (diff >= 10) return PC_POINTS.winVsHigher10; // venceu alguém 10+ PR acima
+  if (diff <= -10) return PC_POINTS.winVsLower10; // venceu alguém 10+ PR abaixo
+  return PC_POINTS.winDefault;
 }
 
 function applyNormalVictory(fight, winnerId) {
   const loserId = fight.challenger_id === winnerId ? fight.challenged_id : fight.challenger_id;
   const winnerBefore = rankedProfile(winnerId);
   const loserBefore = rankedProfile(loserId);
-  const winnerPoints = calculateWinPoints(winnerBefore, loserBefore);
-  const loserPoints = 1;
+  const winnerPrPoints = calculateWinPrPoints(winnerBefore, loserBefore);
+  const winnerPcPoints = calculateWinPcPoints(winnerBefore, loserBefore);
+  const loserPrPoints = PR_POINTS.loss;
+  const loserPcPoints = PC_POINTS.loss;
 
   db.transaction(() => {
     db.prepare(`
       UPDATE ranked_profiles
       SET pr = pr + ?, pc = pc + ?, wins = wins + 1, updated_at = CURRENT_TIMESTAMP
       WHERE player_id = ?
-    `).run(winnerPoints, winnerPoints, winnerId);
+    `).run(winnerPrPoints, winnerPcPoints, winnerId);
     db.prepare(`
       UPDATE ranked_profiles
       SET pr = pr + ?, pc = pc + ?, losses = losses + 1, updated_at = CURRENT_TIMESTAMP
       WHERE player_id = ?
-    `).run(loserPoints, loserPoints, loserId);
+    `).run(loserPrPoints, loserPcPoints, loserId);
     db.prepare(`
       UPDATE ranked_fights
       SET status = 'completed', winner_id = ?, result_type = 'normal', finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
@@ -222,27 +396,35 @@ function applyNormalVictory(fight, winnerId) {
     `).run(winnerId, fight.id);
   })();
 
-  return { winnerPoints, loserPoints, loserId };
+  return { winnerPrPoints, winnerPcPoints, loserPrPoints, loserPcPoints, loserId };
 }
 
 function applyWoVictory(fight, winnerId, loserId, resultType = 'wo') {
   db.transaction(() => {
     db.prepare(`
       UPDATE ranked_profiles
-      SET pr = pr + 1, pc = pc + 1, wo_wins = wo_wins + 1, updated_at = CURRENT_TIMESTAMP
+      SET pr = pr + ?, pc = pc + ?, wo_wins = wo_wins + 1, updated_at = CURRENT_TIMESTAMP
       WHERE player_id = ?
-    `).run(winnerId);
+    `).run(PR_POINTS.woWin, PC_POINTS.woWin, winnerId);
     db.prepare(`
       UPDATE ranked_profiles
-      SET pr = MAX(pr - 3, 0), wo_losses = wo_losses + 1, updated_at = CURRENT_TIMESTAMP
+      SET pr = MAX(pr + ?, 0), pc = MAX(pc + ?, 0), wo_losses = wo_losses + 1, updated_at = CURRENT_TIMESTAMP
       WHERE player_id = ?
-    `).run(loserId);
+    `).run(PR_POINTS.woLoss, PC_POINTS.woLoss, loserId);
     db.prepare(`
       UPDATE ranked_fights
       SET status = 'wo_completed', winner_id = ?, result_type = ?, finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(winnerId, resultType, fight.id);
   })();
+
+  return {
+    winnerPrPoints: PR_POINTS.woWin,
+    winnerPcPoints: PC_POINTS.woWin,
+    loserPrPoints: PR_POINTS.woLoss,
+    loserPcPoints: PC_POINTS.woLoss,
+    loserId,
+  };
 }
 
 function rankedRules() {
@@ -253,25 +435,37 @@ function rankedRules() {
       '▢',
       '▢ • */iRank* — entra na lista rankeada.',
       '▢ • */listaRank* — mostra todos os inscritos.',
-      '▢ • */desafio @pessoa* — desafia um jogador.',
+      '▢ • */desafio @pessoa* — desafia um jogador inscrito na rankeada.',
       '▢ • */adesafio* — aceita o desafio recebido.',
       '▢ • */rdesafio* — recusa o desafio recebido.',
       '▢ • */RV ID @pessoa* — juiz/admin registra vencedor.',
+      '▢ • */removerrank @pessoa* — ADM/Alta Cúpula remove alguém da rankeada.',
       '▢',
       '▢ *Limites:*',
       `▢ • Máximo de *${MAX_DAILY_FIGHTS}* lutas por dia.`,
       '▢ • Vitória: espera de 1 hora para desafiar de novo.',
       '▢ • Derrota: espera de 3 horas para desafiar de novo.',
       '▢ • Com 2 lutas feitas no dia, pode recusar sem penalidade.',
+      '▢ • Só é possível desafiar players que estejam na */listaRank*.',
+      '▢ • Desafios só podem ser lançados das *06:00 às 22:00*.',
+      '▢ • O tempo de W.O pausa das *23:00 às 06:00* e volta a contar às 06:00.',
       '▢ • Diferença máxima: 15 PR, com exceção para quem tem menos PR e não tem oponente próximo.',
       '▢',
-      '▢ *Pontos:*',
-      '▢ • Vitória normal: +2 PR / +2 PC.',
-      '▢ • Vitória contra alguém 10+ PR acima: +5 PR / +5 PC.',
-      '▢ • Vitória contra alguém 10+ PR abaixo: +1 PR / +1 PC.',
-      '▢ • Derrota normal: +1 PR / +1 PC.',
-      '▢ • Vitória por W.O: +1 PR / +1 PC.',
+      '▢ *Pontos de PR:*',
+      '▢ • Vitória normal: +2 PR.',
+      '▢ • Vitória contra alguém 10+ PR acima: +5 PR.',
+      '▢ • Vitória contra alguém 10+ PR abaixo: +1 PR.',
+      '▢ • Derrota normal: +1 PR.',
+      '▢ • Vitória por W.O: +1 PR.',
       '▢ • Derrota por W.O: -3 PR.',
+      '▢',
+      '▢ *Pontos de PC:*',
+      '▢ • Vitória normal: +15 PC.',
+      '▢ • Vitória contra alguém 10+ PR acima: +20 PC.',
+      '▢ • Vitória contra alguém 10+ PR abaixo: +5 PC.',
+      '▢ • Derrota normal: +5 PC.',
+      '▢ • Vitória por W.O: +5 PC.',
+      '▢ • Derrota por W.O: -3 PC.',
       '▢',
       '▢ *Elos:*',
       '▢ • Iniciante — 0 PR',
@@ -339,17 +533,38 @@ function listRanked() {
 function createChallenge(message, argsText) {
   ensureSeason();
   ensureNoExpiredChallenges();
+
+  if (!isChallengeWindowOpen()) {
+    return {
+      ok: false,
+      message: 'Desafios rankeados só podem ser feitos das *06:00 às 22:00* no horário do RPG.',
+    };
+  }
+
   const challenger = getOrCreatePlayerFromMessage(message, { touch: true });
-  ensureRankedProfile(challenger.id);
+  const challengerRank = rankedProfile(challenger.id);
+  if (!challengerRank) {
+    return { ok: false, message: 'Você ainda não está na lista rankeada. Use */iRank* primeiro.' };
+  }
+
   const targetId = getFirstMentionedId(message, argsText);
   if (!targetId) return { ok: false, message: 'Use assim: */desafio @pessoa*' };
 
-  const challenged = getOrCreatePlayerByWhatsAppId(targetId, null, { touch: false });
-  if (challenged.id === challenger.id) return { ok: false, message: 'Você não pode desafiar a si mesmo.' };
-  ensureRankedProfile(challenged.id);
+  const challenged = getPlayerByWhatsAppId(targetId);
+  if (!challenged) {
+    return { ok: false, message: 'Essa pessoa não está cadastrada no RPG e não está na lista rankeada.' };
+  }
 
-  const challengerRank = rankedProfile(challenger.id);
+  if (challenged.id === challenger.id) return { ok: false, message: 'Você não pode desafiar a si mesmo.' };
+
   const challengedRank = rankedProfile(challenged.id);
+  if (!challengedRank) {
+    return {
+      ok: false,
+      message: `${mentionPlayer(challenged)} não está na lista rankeada. Ela precisa usar */iRank* antes de receber desafios.`,
+      mentions: [challenged.whatsapp_id],
+    };
+  }
 
   if (fightCountToday(challenger.id) >= MAX_DAILY_FIGHTS) return { ok: false, message: 'Você já atingiu o limite de 5 lutas rankeadas hoje.' };
   if (fightCountToday(challenged.id) >= MAX_DAILY_FIGHTS) return { ok: false, message: 'Esse jogador já atingiu o limite de 5 lutas rankeadas hoje.' };
@@ -364,10 +579,11 @@ function createChallenge(message, argsText) {
   const range = challengeRangeAllowed(challengerRank, challengedRank);
   if (!range.ok) return range;
 
+  const acceptExpiresAt = rankedDeadlineSql(ACCEPT_HOURS);
   const info = db.prepare(`
     INSERT INTO ranked_fights (chat_id, challenger_id, challenged_id, date_key, accept_expires_at)
-    VALUES (?, ?, ?, ?, datetime('now', '+5 hours'))
-  `).run(message.from, challenger.id, challenged.id, dateKey());
+    VALUES (?, ?, ?, ?, ?)
+  `).run(message.from, challenger.id, challenged.id, dateKey(), acceptExpiresAt);
   const code = `R${String(info.lastInsertRowid).padStart(4, '0')}`;
   db.prepare('UPDATE ranked_fights SET fight_code = ? WHERE id = ?').run(code, info.lastInsertRowid);
 
@@ -381,7 +597,8 @@ function createChallenge(message, argsText) {
       `🎯 Desafiado: ${mentionPlayer(challenged)} — PR ${challengedRank.pr}`,
       range.exception ? '⚠️ Exceção aplicada: não havia oponente próximo para o jogador com menos PR.' : null,
       '',
-      `${mentionPlayer(challenged)}, use */Adesafio* para aceitar ou */Rdesafio* para recusar em até 5 horas.`,
+      `${mentionPlayer(challenged)}, use */Adesafio* para aceitar ou */Rdesafio* para recusar em até 5 horas úteis de W.O.`,
+      `⏳ Prazo calculado: *${rankedDateTimeText(new Date(`${acceptExpiresAt.replace(' ', 'T')}Z`))}*.`,
     ].filter(Boolean).join('\n'),
     mentions: [challenger.whatsapp_id, challenged.whatsapp_id],
   };
@@ -397,12 +614,13 @@ function acceptChallenge(message) {
   `).get(player.id);
   if (!fight) return { ok: false, message: 'Você não tem desafio rankeado pendente para aceitar.' };
 
+  const fightExpiresAt = rankedDeadlineSql(FIGHT_HOURS);
   db.prepare(`
     UPDATE ranked_fights
     SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP,
-        fight_expires_at = datetime('now', '+24 hours'), updated_at = CURRENT_TIMESTAMP
+        fight_expires_at = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(fight.id);
+  `).run(fightExpiresAt, fight.id);
 
   const challenger = getRankedPlayer(fight.challenger_id);
   const challenged = getRankedPlayer(fight.challenged_id);
@@ -413,7 +631,8 @@ function acceptChallenge(message) {
       '',
       `🆔 Luta: *${fight.fight_code}*`,
       `${mentionPlayer(challenger)} vs ${mentionPlayer(challenged)}`,
-      'A luta precisa terminar em até *24 horas*.',
+      'A luta precisa terminar em até *24 horas úteis de W.O*.',
+      `⏳ Prazo calculado: *${rankedDateTimeText(new Date(`${fightExpiresAt.replace(' ', 'T')}Z`))}*.`,
       'Depois, Juiz Oficial/Admin/Alta Cúpula usa: */RV ID @vencedor*',
     ].join('\n'),
     mentions: [challenger.whatsapp_id, challenged.whatsapp_id],
@@ -430,25 +649,47 @@ function refuseChallenge(message) {
   `).get(player.id);
   if (!fight) return { ok: false, message: 'Você não tem desafio rankeado pendente para recusar.' };
 
-  const count = fightCountToday(player.id);
-  db.prepare(`
-    UPDATE ranked_fights
-    SET status = 'refused', result_type = 'recusado', finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(fight.id);
-
+  const challengedFightCount = fightCountToday(player.id);
   const challenger = getRankedPlayer(fight.challenger_id);
+
+  if (challengedFightCount >= FREE_REFUSE_AFTER_FIGHTS) {
+    db.prepare(`
+      UPDATE ranked_fights
+      SET status = 'refused', result_type = 'recusado_sem_penalidade', finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(fight.id);
+
+    return {
+      ok: true,
+      message: [
+        '🚪 *Desafio recusado sem penalidade.*',
+        '',
+        'Como o desafiado já fez 2 lutas hoje, nenhum dos lados ganhou ou perdeu PR/PC.',
+        `Desafio de ${mentionPlayer(challenger)} foi encerrado.`,
+      ].join('\n'),
+      mentions: [player.whatsapp_id, challenger.whatsapp_id],
+    };
+  }
+
+  const outcome = applyWoVictory(fight, fight.challenger_id, fight.challenged_id, 'recusa_wo');
+  const updatedChallenger = getRankedPlayer(fight.challenger_id);
+  const updatedChallenged = getRankedPlayer(fight.challenged_id);
+
   return {
     ok: true,
     message: [
-      '🚪 *Desafio recusado.*',
+      '🚪 *Desafio recusado — derrota por W.O.*',
       '',
-      count >= FREE_REFUSE_AFTER_FIGHTS
-        ? 'Como você já fez 2 lutas hoje, a recusa foi registrada sem penalidade.'
-        : 'Recusa registrada. Nenhum dos lados ganhou ou perdeu PR.',
-      `Desafio de ${mentionPlayer(challenger)} foi encerrado.`,
+      `${mentionPlayer(updatedChallenged)} recusou o desafio e recebeu derrota por W.O.`,
+      `${mentionPlayer(updatedChallenger)} venceu por W.O.`,
+      '',
+      `✅ ${mentionPlayer(updatedChallenger)}: +${outcome.winnerPrPoints} PR / +${outcome.winnerPcPoints} PC`,
+      `❌ ${mentionPlayer(updatedChallenged)}: ${outcome.loserPrPoints} PR / ${outcome.loserPcPoints} PC`,
+      '',
+      `📊 ${mentionPlayer(updatedChallenger)} agora tem PR *${updatedChallenger.pr}* / PC *${updatedChallenger.pc}* — ${eloForPr(updatedChallenger.pr)}`,
+      `📊 ${mentionPlayer(updatedChallenged)} agora tem PR *${updatedChallenged.pr}* / PC *${updatedChallenged.pc}* — ${eloForPr(updatedChallenged.pr)}`,
     ].join('\n'),
-    mentions: [player.whatsapp_id, challenger.whatsapp_id],
+    mentions: [updatedChallenged.whatsapp_id, updatedChallenger.whatsapp_id],
   };
 }
 
@@ -458,6 +699,63 @@ async function canRegisterRankedWinner(message) {
   if (isHighCouncilRoleId(actor.cargo_id)) return true;
   if (String(actor.trabalho_id || '').toUpperCase() === 'J.O') return true;
   return false;
+}
+
+
+async function canRemoveRankedPlayer(message) {
+  if (await isAdmin(message)) return true;
+  const actor = getOrCreatePlayerFromMessage(message, { touch: true });
+  return isHighCouncilRoleId(actor.cargo_id);
+}
+
+async function removeRankedPlayer(message, argsText) {
+  ensureNoExpiredChallenges();
+  if (!(await canRemoveRankedPlayer(message))) {
+    return { ok: false, message: 'Apenas ADM ou Alta Cúpula pode usar */removerrank*.' };
+  }
+
+  const targetId = getFirstMentionedId(message, argsText);
+  if (!targetId) return { ok: false, message: 'Use assim: */removerrank @pessoa*' };
+
+  const target = getPlayerByWhatsAppId(targetId);
+  if (!target) return { ok: false, message: 'Essa pessoa não está cadastrada no RPG.' };
+
+  const profile = rankedProfile(target.id);
+  if (!profile) {
+    return {
+      ok: false,
+      message: `${mentionPlayer(target)} não está inscrito na rankeada.`,
+      mentions: [target.whatsapp_id],
+    };
+  }
+
+  const active = activeChallengeForPlayer(target.id);
+  db.transaction(() => {
+    if (active) {
+      db.prepare(`
+        UPDATE ranked_fights
+        SET status = 'cancelled', result_type = 'removido_da_rank', finished_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(active.id);
+    }
+
+    db.prepare('DELETE FROM ranked_profiles WHERE player_id = ?').run(target.id);
+  })();
+
+  return {
+    ok: true,
+    message: [
+      '🗑️ *Player removido da rankeada.*',
+      '',
+      `Player: ${mentionPlayer(target)}`,
+      `PR removido: *${profile.pr}*`,
+      `PC removido: *${profile.pc}*`,
+      active ? '⚠️ O desafio/luta pendente dessa pessoa também foi cancelado.' : null,
+      '',
+      'Para voltar à lista, a pessoa precisará usar */iRank* novamente.',
+    ].filter(Boolean).join('\n'),
+    mentions: [target.whatsapp_id],
+  };
 }
 
 async function registerWinner(message, argsText) {
@@ -492,8 +790,8 @@ async function registerWinner(message, argsText) {
       '🏆 *Resultado rankeado registrado!*',
       '',
       `🆔 Luta: *${fight.fight_code}*`,
-      `✅ Vencedor: ${mentionPlayer(winner)} — +${outcome.winnerPoints} PR / +${outcome.winnerPoints} PC`,
-      `❌ Perdedor: ${mentionPlayer(loser)} — +${outcome.loserPoints} PR / +${outcome.loserPoints} PC`,
+      `✅ Vencedor: ${mentionPlayer(winner)} — +${outcome.winnerPrPoints} PR / +${outcome.winnerPcPoints} PC`,
+      `❌ Perdedor: ${mentionPlayer(loser)} — +${outcome.loserPrPoints} PR / +${outcome.loserPcPoints} PC`,
       '',
       `📊 ${mentionPlayer(winner)} agora tem PR *${winner.pr}* / PC *${winner.pc}* — ${eloForPr(winner.pr)}`,
       `📊 ${mentionPlayer(loser)} agora tem PR *${loser.pr}* / PC *${loser.pc}* — ${eloForPr(loser.pr)}`,
@@ -514,6 +812,7 @@ module.exports = {
   acceptChallenge,
   refuseChallenge,
   registerWinner,
+  removeRankedPlayer,
   ensureRankedProfile,
   rankedProfile,
   getRankedPlayer,
