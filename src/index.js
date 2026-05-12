@@ -37,6 +37,9 @@ const { zMarketCommand, zBuyCommand } = require('./commands/zMarket');
 const { inspecionarCommand } = require('./commands/inspecionar');
 const { extratoCommand } = require('./commands/extrato');
 const { emprestimoCommand } = require('./commands/emprestimo');
+const { travelCommand, travelAdminCommand } = require('./commands/travel');
+const { muteCommand, unmuteCommand } = require('./commands/mute');
+const { blockCmdCommand, unblockCmdCommand } = require('./commands/blockCmd');
 
 migrate();
 
@@ -107,29 +110,6 @@ client.on('message', async (message) => {
 
     switch (command.name) {
 
-case 'linkar':
-  await linkarCommand(message, command);
-  break;
-
-case 'viajar':
-  await viajarCommand(message, command);
-  break;
-
-case 'mute':
-  await muteCommand(message, command);
-  break;
-
-case 'unmute':
-  await unmuteCommand(message, command);
-  break;
-
-case 'blockcmd':
-  await blockCmdCommand(message, command);
-  break;
-
-case 'unblockcmd':
-  await unblockCmdCommand(message, command);
-  break;
 
       case 'registro':
         await registroCommand(message, command);
@@ -433,6 +413,30 @@ case 'unblockcmd':
         await blackjackCommand(message, command, client);
         break;
 
+        case 'linkar':
+          await travelAdminCommand(message, command);
+          break;
+
+        case 'viajar':
+          await travelCommand(message, command);
+          break;
+
+        case 'mute':
+          await muteCommand(message, command);
+          break;
+
+        case 'unmute':
+  await unmuteCommand(message, command);
+  break;
+
+case 'blockcmd':
+  await blockCmdCommand(message, command);
+  break;
+
+case 'unblockcmd':
+  await unblockCmdCommand(message, command);
+  break;
+
       case 'carta':
       case 'hit':
       case 'parar':
@@ -492,8 +496,4 @@ case 'unblockcmd':
 
 client.initialize();
 
-
-const { linkarCommand, viajarCommand } = require('./commands/travel');
-const { muteCommand, unmuteCommand } = require('./commands/mute');
-const { blockCmdCommand, unblockCmdCommand } = require('./commands/blockcmd');
 
