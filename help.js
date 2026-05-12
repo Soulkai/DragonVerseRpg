@@ -274,7 +274,19 @@ async function helpCommand(message) {
     '▢',
     '╰━━─「⚔️」─━━',
     '',
-
+    '╭━━⪩ 🌌 VIAGEM ENTRE UNIVERSOS ⪨━━',
+'▢ /linkar universo',
+'▢ /viajar universo',
+'▢ custo 50kk | 24h retorno',
+'╰━━─',
+'',
+'╭━━⪩ 🔇 CONTROLE ⪨━━',
+'▢ /mute @user',
+'▢ /unmute @user',
+'▢ /blockcmd comando',
+'▢ /unblockcmd comando',
+'╰━━─',
+'',
     '╭━━⪩ 🏆 *TORNEIOS* ⪨━━',
     '▢',
     '▢ • */gerartorneio Nome Valor*',
@@ -376,16 +388,3 @@ async function helpCommand(message) {
 
 module.exports = { helpCommand };
 
-
-╭━━⪩ 🌌 VIAGEM ENTRE UNIVERSOS ⪨━━
-▢ /linkar universo
-▢ /viajar universo
-▢ custo 50kk | 24h retorno
-╰━━─
-
-╭━━⪩ 🔇 CONTROLE ⪨━━
-▢ /mute @user
-▢ /unmute @user
-▢ /blockcmd comando
-▢ /unblockcmd comando
-╰━━─
