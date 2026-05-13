@@ -37,9 +37,7 @@ const { zMarketCommand, zBuyCommand } = require('./commands/zMarket');
 const { inspecionarCommand } = require('./commands/inspecionar');
 const { extratoCommand } = require('./commands/extrato');
 const { emprestimoCommand } = require('./commands/emprestimo');
-const { travelCommand, travelAdminCommand } = require('./commands/travel');
-const { muteCommand, unmuteCommand } = require('./commands/mute');
-const { blockCmdCommand, unblockCmdCommand } = require('./commands/blockCmd');
+const { ensureTables, processTravelReturns, isMuted, isCommandBlocked, travelAdminCommand, travelCommand, muteCommand, unmuteCommand, blockCmdCommand, unblockCmdCommand } = require('./commands/travel');
 
 migrate();
 
@@ -100,6 +98,12 @@ setInterval(() => {
   });
 }, 5 * 60 * 1000);
 
+setInterval(() => {
+  processTravelReturns(client).catch((error) => {
+    console.error('Erro ao processar viagem:', error);
+  });
+}, 60 * 1000);
+
 client.on('message', async (message) => {
   try {
     const command = parseCommand(message.body || '', settings.prefixes);
@@ -107,6 +111,17 @@ client.on('message', async (message) => {
 
     runMaintenanceIfNeeded(false);
     touchPlayerActivity(message);
+
+    const groupChatId = message.from.endsWith('@g.us') ? message.from : null;
+const commandName = command.name;
+
+if (groupChatId && isCommandBlocked(groupChatId, commandName)) {
+  return;
+}
+
+if (groupChatId && message.author && isMuted(groupChatId, message.author)) {
+  return;
+}
 
     switch (command.name) {
 
@@ -494,6 +509,7 @@ case 'unblockcmd':
   }
 });
 
+ensureTables();
 client.initialize();
 
 
