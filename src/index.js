@@ -38,6 +38,9 @@ const { inspecionarCommand } = require('./commands/inspecionar');
 const { extratoCommand } = require('./commands/extrato');
 const { emprestimoCommand } = require('./commands/emprestimo');
 const { ensureTables, processTravelReturns, isMuted, isCommandBlocked, travelAdminCommand, travelCommand, muteCommand, unmuteCommand, blockCmdCommand, unblockCmdCommand } = require('./commands/travel');
+const { runMigrations } = require('./database/migrationEngine');
+
+runMigrations();
 
 migrate();
 
