@@ -16,8 +16,9 @@ function addColumnIfMissing(table, column, type) {
   }
 }
 
-function ensureTable(table, schemaSQL) {
-  db.prepare(schemaSQL).run();
+// 🔥 FIX PRINCIPAL: não usar wrapper estranho pra CREATE TABLE
+function ensureTable(sql) {
+  db.exec(sql); // <- ISSO é o correto no better-sqlite3
 }
 
 function runMigrations() {
