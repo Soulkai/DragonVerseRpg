@@ -42,6 +42,7 @@ const { runMigrations } = require('./database/migrationEngine');
 
 runMigrations();
 
+migrate();
 
 let lastMaintenanceAt = 0;
 function runMaintenanceIfNeeded(force = false) {
