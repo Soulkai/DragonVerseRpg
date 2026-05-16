@@ -6,7 +6,7 @@ const { MessageMedia } = require('whatsapp-web.js');
  */
 async function spotifySearch(message, command) {
     const text = command.argsText;
-    if (!text) return message.reply(`Exemplo: ${command.usedPrefix}${command.name} Slash Inferno`);
+    if (!text) return message.reply(`Exemplo: ${command.usedPrefix}${command.name} Nome da Música`);
 
     try {
         const { data: res } = await axios.get("https://systemzone.store/api/ytsearch", {
@@ -50,15 +50,15 @@ async function spotifyDownload(message, command, client) {
     if (!url) return message.reply(`Exemplo: ${command.usedPrefix}${command.name} [link-youtube]`);
 
     try {
-        // Corrigido para a API v2 conforme seu exemplo
-        const { data: res } = await axios.get("https://systemzone.store/v2/player", {
+        const { data: res } = await axios.get("[link removido]
+```player", {
             params: { text: url, apikey: "freekey" }
         });
 
         if (!res || !res.status) throw new Error('Falha na API de download do YouTube');
 
-        const audioUrl = res.download_url;
-        const media = await MessageMedia.fromUrl(audioUrl);
+        // O bot baixa e converte a URL em áudio para o WhatsApp
+        const media = await MessageMedia.fromUrl(res.download_url);
 
         await client.sendMessage(message.from, media, {
             sendAudioAsVoice: false,
