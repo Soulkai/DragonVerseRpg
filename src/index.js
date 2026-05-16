@@ -37,6 +37,7 @@ const { zMarketCommand, zBuyCommand } = require('./commands/zMarket');
 const { inspecionarCommand } = require('./commands/inspecionar');
 const { extratoCommand } = require('./commands/extrato');
 const { emprestimoCommand } = require('./commands/emprestimo');
+const { spotifySearch, spotifyDownload } = require('./services/spotifyService');
 
 migrate();
 
@@ -133,6 +134,15 @@ client.on('message', async (message) => {
         await codigoResgateCommand(message, command);
         break;
 
+     case 'spotify':
+       await spotifySearch(message, command);
+       break;
+
+    case 'spotify2':
+       await spotifyDownload(message, command, client);
+       break;
+
+        
       case 'perfil':
         await perfilCommand(message, command);
         break;
