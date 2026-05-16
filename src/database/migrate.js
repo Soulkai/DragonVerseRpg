@@ -15,6 +15,10 @@ function addColumnIfMissing(tableName, columnName, definition) {
 }
 
 function migrate() {
+  // CORREÇÃO: Remove a tabela antiga para recriá-la com PRIMARY KEY e evitar erro de ON CONFLICT
+  // Após rodar o bot uma vez com sucesso, você pode apagar esta linha abaixo:
+  db.exec("DROP TABLE IF EXISTS universe_links;");
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS universes (
       id INTEGER PRIMARY KEY,
