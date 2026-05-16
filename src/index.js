@@ -35,7 +35,7 @@ const { zMarketCommand, zBuyCommand } = require('./commands/zMarket');
 const { inspecionarCommand } = require('./commands/inspecionar');
 const { extratoCommand } = require('./commands/extrato');
 const { emprestimoCommand } = require('./commands/emprestimo');
-const { viagemCommand } = require('./commands/viagem'); // [MUDANÇA] Import do comando de viagem
+const { viagemCommand } = require('./commands/viagem'); // Comando de viagem
 
 // Importação de Serviços
 const { runEconomyMaintenance } = require('./services/economyService');
@@ -43,7 +43,7 @@ const { purgeInactiveCharacters } = require('./services/inactivityService');
 const { touchPlayerActivity } = require('./services/playerService');
 const { runAutoEvents } = require('./services/eventService');
 const { spotifySearch, spotifyDownload } = require('./services/spotifyService');
-const { processExpiredTravels } = require('./services/travelService'); // [MUDANÇA] Import do serviço de viagem
+const { processExpiredTravels } = require('./services/travelService'); // Serviço para retorno de viagem
 
 // Inicialização do Banco de Dados
 migrate();
@@ -57,7 +57,7 @@ function runMaintenanceIfNeeded(force = false) {
   const inactive = purgeInactiveCharacters();
   const economy = runEconomyMaintenance();
   
-  // [MUDANÇA] Processa retorno automático de viagens expiradas
+  // Processa retorno automático de viagens de 24h
   const travelCount = processExpiredTravels(client);
 
   if (inactive.removedClaims > 0) {
@@ -73,7 +73,6 @@ function runMaintenanceIfNeeded(force = false) {
   }
 }
 
-// Manutenção inicial e agendada
 runMaintenanceIfNeeded(true);
 setInterval(() => runMaintenanceIfNeeded(true), 60 * 60 * 1000);
 
@@ -119,15 +118,7 @@ client.on('message', async (message) => {
     if (!command) return;
 
     runMaintenanceIfNeeded(false);
-    const player = touchPlayerActivity(message);
-
-    // [MUDANÇA] Verificação de Mute
-    if (player?.is_muted) return;
-
-    // [MUDANÇA] Verificação de Comandos Bloqueados no Grupo
-    if (isCommandBlocked(message.from, command.name)) {
-      return message.reply('🚫 Este grupo bloqueou o uso desta categoria de comandos.');
-    }
+    touchPlayerActivity(message);
 
     switch (command.name) {
       case 'registro':
@@ -207,8 +198,8 @@ client.on('message', async (message) => {
         await rmvPersonagemCommand(message, command);
         break;
 
-      case 'viajar': // [MUDANÇA] Registro do comando de viagem
-      case 'linkar': // [MUDANÇA] Registro do comando de linkar universo
+      case 'viajar': 
+      case 'linkar': 
         await viagemCommand(message, command, client);
         break;
 
@@ -252,7 +243,6 @@ client.on('message', async (message) => {
         break;
 
       case 'convite':
-      case 'convites':
         await conviteCommand(message, command, client);
         break;
 
@@ -271,7 +261,6 @@ client.on('message', async (message) => {
         break;
 
       case 'caixa':
-      case 'caixas':
         await caixaCommand(message, command, client);
         break;
 
