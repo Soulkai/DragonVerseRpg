@@ -37,10 +37,6 @@ const { zMarketCommand, zBuyCommand } = require('./commands/zMarket');
 const { inspecionarCommand } = require('./commands/inspecionar');
 const { extratoCommand } = require('./commands/extrato');
 const { emprestimoCommand } = require('./commands/emprestimo');
-const { ensureTables, processTravelReturns, isMuted, isCommandBlocked, travelAdminCommand, travelCommand, muteCommand, unmuteCommand, blockCmdCommand, unblockCmdCommand } = require('./commands/travel');
-const { runMigrations } = require('./database/migrationEngine');
-
-runMigrations();
 
 migrate();
 
@@ -101,12 +97,6 @@ setInterval(() => {
   });
 }, 5 * 60 * 1000);
 
-setInterval(() => {
-  processTravelReturns(client).catch((error) => {
-    console.error('Erro ao processar viagem:', error);
-  });
-}, 60 * 1000);
-
 client.on('message', async (message) => {
   try {
     const command = parseCommand(message.body || '', settings.prefixes);
@@ -115,20 +105,7 @@ client.on('message', async (message) => {
     runMaintenanceIfNeeded(false);
     touchPlayerActivity(message);
 
-    const groupChatId = message.from.endsWith('@g.us') ? message.from : null;
-const commandName = command.name;
-
-if (groupChatId && isCommandBlocked(groupChatId, commandName)) {
-  return;
-}
-
-if (groupChatId && message.author && isMuted(groupChatId, message.author)) {
-  return;
-}
-
     switch (command.name) {
-
-
       case 'registro':
         await registroCommand(message, command);
         break;
@@ -431,30 +408,6 @@ if (groupChatId && message.author && isMuted(groupChatId, message.author)) {
         await blackjackCommand(message, command, client);
         break;
 
-        case 'linkar':
-          await travelAdminCommand(message, command);
-          break;
-
-        case 'viajar':
-          await travelCommand(message, command);
-          break;
-
-        case 'mute':
-          await muteCommand(message, command);
-          break;
-
-        case 'unmute':
-  await unmuteCommand(message, command);
-  break;
-
-case 'blockcmd':
-  await blockCmdCommand(message, command);
-  break;
-
-case 'unblockcmd':
-  await unblockCmdCommand(message, command);
-  break;
-
       case 'carta':
       case 'hit':
       case 'parar':
@@ -512,7 +465,4 @@ case 'unblockcmd':
   }
 });
 
-ensureTables();
 client.initialize();
-
-
