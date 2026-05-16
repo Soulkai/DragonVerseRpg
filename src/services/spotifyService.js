@@ -2,59 +2,65 @@ const axios = require('axios');
 const { MessageMedia } = require('whatsapp-web.js');
 
 /**
- * Busca músicas no Spotify e retorna uma lista formatada.
+ * Busca vídeos no YouTube e retorna uma lista formatada (Substitui o Spotify).
  */
 async function spotifySearch(message, command) {
     const text = command.argsText;
     if (!text) return message.reply(`Exemplo: ${command.usedPrefix}${command.name} Slash Inferno`);
 
     try {
-        const { data: res } = await axios.get("https://systemzone.store/api/search/spotify", {
-            params: { q: text, limit: 10, apikey: "freekey" }
+        const { data: res } = await axios.get("https://systemzone.store/api/ytsearch", {
+            params: { text: text }
         });
 
-        if (!res.status || !res.result || res.result.length === 0) {
+        if (res.status !== "sucesso" || !res.resultados || res.resultados.length === 0) {
             return message.reply('Nenhum resultado encontrado.');
         }
 
-        let responseText = `╭━━⪩ 🎵 *SPOTIFY SEARCH* ⪨━━\n`;
+        let responseText = `╭━━⪩ 🎥 *YOUTUBE SEARCH* ⪨━━\n`;
         responseText += `▢\n`;
         responseText += `▢ • *Busca:* ${text}\n`;
-        responseText += `▢ • *Resultados:* ${res.result.length}\n`;
+        responseText += `▢ • *Resultados:* ${res.resultados.length}\n`;
         responseText += `▢\n`;
 
-        res.result.forEach((track, index) => {
+        // Mostra os 10 primeiros resultados
+        res.resultados.slice(0, 10).forEach((track, index) => {
             responseText += `▢ ${index + 1}. *${track.title}*\n`;
-            responseText += `▢ ⤷ Artista: ${track.artists}\n`;
+            responseText += `▢ ⤷ Canal: ${track.author}\n`;
             responseText += `▢ ⤷ Duração: ${track.duration}\n`;
-            responseText += `▢ ⤷ Baixar: ${command.usedPrefix}spotify2 ${track.url}\n`;
+            responseText += `▢ ⤷ Baixar: ${command.usedPrefix}spotify2 ${track.youtube_url}\n`;
             responseText += `▢\n`;
         });
 
-        responseText += `╰━━─「🎧」─━━`;
+        responseText += `╰━━─「🎬」─━━`;
 
         await message.reply(responseText);
+
     } catch (e) {
-        console.error('Erro ao buscar no Spotify:', e);
-        message.reply('Ocorreu um erro ao realizar a busca no Spotify.');
+        console.error('Erro ao buscar no YouTube:', e);
+        message.reply('Ocorreu um erro ao realizar a busca no YouTube.');
     }
 }
 
 /**
- * Faz o download da música do Spotify e envia como áudio.
+ * Faz o download do áudio do YouTube e envia (Substitui o spotify2).
  */
 async function spotifyDownload(message, command, client) {
     const url = command.argsText;
-    if (!url) return message.reply(`Exemplo: ${command.usedPrefix}${command.name} [link-spotify]`);
+    if (!url) return message.reply(`Exemplo: ${command.usedPrefix}${command.name} [link-youtube]`);
 
     try {
-        const { data: res } = await axios.get("https://systemzone.store/api/v1/spotify", {
+        const { data: res } = await axios.get("[link removido]
+```player", {
             params: { text: url, apikey: "freekey" }
         });
 
-        if (!res || !res.status) throw new Error('Falha na API de download');
+        if (!res || !res.status) throw new Error('Falha na API de download do YouTube');
 
+        // Garante que a URL use HTTPS
         const audioUrl = res.download_url.replace(/^http:\/\//i, 'https://');
+        
+        // Converte a URL em mídia do WhatsApp
         const media = await MessageMedia.fromUrl(audioUrl);
 
         await client.sendMessage(message.from, media, {
@@ -63,7 +69,7 @@ async function spotifyDownload(message, command, client) {
         });
 
     } catch (e) {
-        console.error('Erro no download do Spotify:', e);
+        console.error('Erro no download do YouTube:', e);
         message.reply('Não foi possível processar o download desta música.');
     }
 }
