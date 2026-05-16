@@ -69,6 +69,28 @@ function migrate() {
       FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS travels (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      player_id INTEGER NOT NULL,
+      origin_universe_id INTEGER NOT NULL,
+      destination_universe_id INTEGER NOT NULL,
+      expires_at TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS universe_links (
+      chat_id TEXT PRIMARY KEY,
+      universe_id INTEGER NOT NULL,
+      FOREIGN KEY(universe_id) REFERENCES universes(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS group_command_blocks (
+      chat_id TEXT NOT NULL,
+      command_category TEXT NOT NULL,
+      PRIMARY KEY(chat_id, command_category)
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_player_character_by_universe
     ON character_claims(universe_id, character_id)
     WHERE claim_type = 'player';
@@ -126,11 +148,8 @@ function migrate() {
       FOREIGN KEY(to_player_id) REFERENCES players(id) ON DELETE CASCADE
     );
 
-    CREATE INDEX IF NOT EXISTS idx_transfer_history_from
-    ON transfer_history(from_player_id, created_at);
-
-    CREATE INDEX IF NOT EXISTS idx_transfer_history_to
-    ON transfer_history(to_player_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_transfer_history_from ON transfer_history(from_player_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_transfer_history_to ON transfer_history(to_player_id, created_at);
 
     CREATE TABLE IF NOT EXISTS event_daily_stats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,13 +211,11 @@ function migrate() {
       FOREIGN KEY(claimed_by_player_id) REFERENCES players(id) ON DELETE SET NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_active_events_lookup
-    ON active_events(chat_id, event_type, status);
-
-    CREATE INDEX IF NOT EXISTS idx_active_events_player
-    ON active_events(player_id, status);
+    CREATE INDEX IF NOT EXISTS idx_active_events_lookup ON active_events(chat_id, event_type, status);
+    CREATE INDEX IF NOT EXISTS idx_active_events_player ON active_events(player_id, status);
   `);
 
+  addColumnIfMissing('players', 'is_muted', 'INTEGER NOT NULL DEFAULT 0');
 
   createDragonVerseExtraTables();
   seedCharacterTemplates();
@@ -210,6 +227,7 @@ function migrate() {
   syncSupremeCharacterClaims();
   seedUniverse2();
 }
+
 
 
 
