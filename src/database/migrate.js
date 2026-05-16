@@ -890,30 +890,3 @@ function createUniverseWithCharacters(universeId, name = null, welcomeText = nul
 }
 
 module.exports = { migrate, createUniverseWithCharacters };
-
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS universe_travel (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  player_id INTEGER,
-  from_universe INTEGER,
-  to_universe INTEGER,
-  start_time TEXT,
-  end_time TEXT
-);
-
-CREATE TABLE IF NOT EXISTS universe_links (
-  universe_id INTEGER PRIMARY KEY,
-  created_at TEXT
-);
-
-CREATE TABLE IF NOT EXISTS muted_users (
-  user_id TEXT PRIMARY KEY
-);
-
-CREATE TABLE IF NOT EXISTS blocked_commands (
-  chat_id TEXT,
-  command TEXT,
-  PRIMARY KEY(chat_id, command)
-);
-`);
