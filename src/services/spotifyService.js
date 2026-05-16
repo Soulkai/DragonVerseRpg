@@ -50,17 +50,14 @@ async function spotifyDownload(message, command, client) {
     if (!url) return message.reply(`Exemplo: ${command.usedPrefix}${command.name} [link-youtube]`);
 
     try {
-        const { data: res } = await axios.get("[link removido]
-```player", {
+        // Corrigido para a API v2 conforme seu exemplo
+        const { data: res } = await axios.get("https://systemzone.store/v2/player", {
             params: { text: url, apikey: "freekey" }
         });
 
         if (!res || !res.status) throw new Error('Falha na API de download do YouTube');
 
-        // Garante que a URL use HTTPS
-        const audioUrl = res.download_url.replace(/^http:\/\//i, 'https://');
-        
-        // Converte a URL em mídia do WhatsApp
+        const audioUrl = res.download_url;
         const media = await MessageMedia.fromUrl(audioUrl);
 
         await client.sendMessage(message.from, media, {
