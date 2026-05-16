@@ -151,17 +151,13 @@ client.on('message', async (message) => {
  await codigoResgateCommand(message, command);
  break;
 
-      case 'spotify':
-      case 'play':
-      case 'yt':
-        await spotifySearch(message, command);
-        break;
+ case 'spotify':
+ await spotifySearch(message, command);
+ break;
 
-      case 'spotify2':
-      case 'playdl':
-      case 'ytdl':
-        await spotifyDownload(message, command, client);
-        break;
+ case 'spotify2':
+ await spotifyDownload(message, command, client);
+ break;
 
  case 'perfil':
  await perfilCommand(message, command);
@@ -496,3 +492,8 @@ client.on('message', async (message) => {
  }
  } catch (error) {
  console.error('Erro ao processar mensagem:', error);
+ await message.reply('Ocorreu um erro interno ao processar esse comando.');
+ }
+});
+
+client.initialize();
