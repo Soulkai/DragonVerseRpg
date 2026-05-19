@@ -44,7 +44,6 @@ const { raidCommand } = require('./commands/raid');
 const { boxCommand } = require('./commands/box');
 const { dviCommand } = require('./commands/dvi');
 const { mercadoNegroCommand } = require('./commands/mercadoNegro'); // 🌑 NOVO: Importando Mercado Negro
-const { gachaAtivarCommand } = require('./commands/gachaAdmin');
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
 
@@ -125,7 +124,6 @@ if (eventConfig && eventConfig.is_enabled) {
             case 'raid': case 'raids': await raidCommand(message, command); break;
             case 'box': case 'boxe': case 'colecao': case 'coleção': await boxCommand(message, command); break;
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
-            case 'ativargacha': case 'ativar gacha': case 'gacha': await gachaAtivarCommand(message, command); break;
             case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break; // 🌑 Integrado!
             
             // ... (restante dos cases)
