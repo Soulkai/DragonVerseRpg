@@ -88,7 +88,7 @@ function migrateV2() {
         -- ==========================================
         -- 5. SISTEMA DE RAIDS (Agendamento Automático)
         -- ==========================================
-        CREATE TABLE IF NOT EXISTS raid_bosses (
+        CREATE TABLE IF NOT EXISTS ends_at (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             element TEXT NOT NULL,
