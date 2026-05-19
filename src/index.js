@@ -37,6 +37,10 @@ const { extratoCommand } = require('./commands/extrato');
 const { emprestimoCommand } = require('./commands/emprestimo');
 const { viagemCommand } = require('./commands/viagem');
 
+// >> NOVO COMANDO E SISTEMA: GACHA <<
+const { capturarCommand } = require('./commands/capturar');
+const { spawnCharacter } = require('./systems/gacha');
+
 // --- Importação de Serviços ---
 const { runEconomyMaintenance } = require('./services/economyService');
 const { purgeInactiveCharacters } = require('./services/inactivityService');
@@ -98,6 +102,10 @@ async function runAutoEventsIfNeeded(force = false) {
     await runAutoEvents(client);
 }
 
+// >> NOVO: CONTADOR DE MENSAGENS PARA O SPAWN <<
+// Registra quantas mensagens cada grupo enviou. { "groupId": count }
+const groupMessageCount = {};
+
 // --- Eventos do Client ---
 client.on('qr', (qr) => {
     console.log('Escaneie o QR Code abaixo com seu WhatsApp:');
@@ -117,6 +125,26 @@ setInterval(() => {
 
 client.on('message', async (message) => {
     try {
+        const groupId = message.from;
+
+        // >> LÓGICA DE SPAWN (A cada 50 mensagens do grupo) <<
+        // Incrementa o contador do grupo onde a mensagem foi enviada
+        if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
+        groupMessageCount[groupId]++;
+
+        // A cada 50 mensagens, tenta spawnar um personagem
+        if (groupMessageCount[groupId] >= 50) {
+            // Zera o contador do grupo
+            groupMessageCount[groupId] = 0;
+            
+            // Adiciona uma pequena aleatoriedade: 50% de chance de spawnar,
+            // para não ficar algo tão mecânico/óbvio para os jogadores.
+            if (Math.random() > 0.5) {
+                // Chama a função de spawn passando o client e o ID do grupo
+                await spawnCharacter(client, groupId).catch(e => console.error('[SPAWN ERRO]', e));
+            }
+        }
+
         const command = parseCommand(message.body || '', settings.prefixes);
         if (!command) return;
 
@@ -124,6 +152,10 @@ client.on('message', async (message) => {
         touchPlayerActivity(message);
 
         switch (command.name) {
+            // >> NOVO COMANDO: CAPTURAR <<
+            case 'capturar': 
+            case 'capture': await capturarCommand(message, command); break;
+
             case 'registro': await registroCommand(message, command); break;
             case 'personagens': await personagensCommand(message, command); break;
             case 'players':
