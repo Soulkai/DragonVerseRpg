@@ -106,7 +106,7 @@ const eventConfig = db.prepare('SELECT is_enabled FROM event_chats WHERE chat_id
 if (eventConfig && eventConfig.is_enabled) {
     if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
     groupMessageCount[groupId]++;
-    if (groupMessageCount[groupId] >= 50) {
+    if (groupMessageCount[groupId] >= 25) {
         groupMessageCount[groupId] = 0;
         if (Math.random() > 0.5) await spawnCharacter(client, groupId).catch(e => console.error('[SPAWN ERRO]', e));
     }
