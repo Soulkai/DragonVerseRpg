@@ -67,6 +67,27 @@ const shopItems = [
     description:
       'É uma nuvem amarela mágica que serve como meio de transporte. Goku obtém a nuvem de Mestre Kame por compensação de ter salvado a Tartaruga. Ela serve a Goku e seus filhos agindo como uma maneira de voar em velocidade alta sem usar nenhuma energia (Ativa-se em Rank 5 de velocidade)(Quando ativo o usuário ganha capacidade de voo)(Pode levar mais 1 aliado)(Modos gigantes, Modos Malignos e Majins não podem utilizar a nuvem)(Pode utilizar teleporte por 5x sendo Rank 4 de Velocidade)(Uso Único)',
   },
+  // >>> NOVOS ITENS DO SISTEMA GACHA AQUI (VALORES 10x MAIORES) <<<
+  {
+    id: 'capsula-comum',
+    name: 'Cápsula da Corporação',
+    rank: 'C',
+    type: 'Captura',
+    price: 250_000_000, 
+    aliases: ['capsula comum', 'cápsula comum', 'capsula', 'cápsula', 'esfera de captura'],
+    description:
+      'Uma cápsula padrão fabricada pela Corporação Cápsula. Utilizada para tentar capturar guerreiros selvagens que aparecem repentinamente pelo Universo. (Uso consumível no comando !capturar)',
+  },
+  {
+    id: 'mafuba',
+    name: 'Selo Mafuba',
+    rank: 'S',
+    type: 'Captura Avançada',
+    price: 2_500_000_000, 
+    aliases: ['mafuba', 'selo mafuba', 'selo', 'capsula avancada'],
+    description:
+      'Um feitiço antigo de contenção extrema criado pelo Mestre Mutaito. Aumenta drasticamente as chances de sucesso ao tentar selar/capturar guerreiros de Raridades superiores. (Uso consumível no comando !capturar)',
+  }
 ];
 
 function normalizeItemSearch(value = '') {
