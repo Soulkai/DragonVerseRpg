@@ -8,7 +8,6 @@ const {
 } = require('./playerService');
 const { recordLedger } = require('./ledgerService');
 
-
 function getActiveDiscount(playerId) {
   return db.prepare(`
     SELECT * FROM player_discounts
@@ -114,7 +113,7 @@ function formatShop() {
   }
 
   lines.push('Para comprar item, use: */comprar Nome do Item*');
-  lines.push('Exemplos: */comprar Scouter* | */comprar Semente dos Deuses*');
+  lines.push('Exemplos: */comprar Scouter* | */comprar capsula comum*');
 
   return { ok: true, message: lines.join('\n') };
 }
