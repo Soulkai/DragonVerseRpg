@@ -1,4 +1,4 @@
-const db = require('./db'); // Ajuste o caminho se necessário dependendo de onde o arquivo ficará
+const db = require('../db');// Ajuste o caminho se necessário dependendo de onde o arquivo ficará
 
 const characterCatalog = [
     // ==========================================
