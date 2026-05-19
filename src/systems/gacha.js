@@ -40,8 +40,8 @@ function attemptCapture(groupId, playerId) {
     let itemName = "";
 
     // ⚠️ Busca à prova de falhas: Olha tanto o ID quanto o NOME do item
-    const mafuba = inventory.find(i => i.item_id === 'mafuba' || String(i.item_name).toLowerCase().includes('mafuba'));
-    const capsula = inventory.find(i => i.item_id === 'capsula-comum' || String(i.item_name).toLowerCase().includes('cápsula') || String(i.item_name).toLowerCase().includes('capsula'));
+    const mafuba = inventory.find(i => i.item_id === 'selo_mafuba' || String(i.item_name).toLowerCase().includes('mafuba'));
+    const capsula = inventory.find(i => i.item_id === 'capsula_comum' || String(i.item_name).toLowerCase().includes('cápsula') || String(i.item_name).toLowerCase().includes('capsula'));
 
     // Verifica primeiro se tem o Mafuba (que é melhor), se não, usa a cápsula normal
     if (mafuba) {
