@@ -333,30 +333,28 @@ const characterCatalog = [
 function seedGacha() {
     console.log('[Gacha Seed] Iniciando o povoamento de 300 personagens de DragonVerse...');
 
-    // Verifica quantos já existem para não inserir repetido atoa
-    const countQuery = db.prepare('SELECT COUNT(*) as count FROM character_catalog').get();
-    
-    if (countQuery.count >= 300) {
-        console.log('[Gacha Seed] O banco de dados já possui todos os guerreiros.');
-        return;
+    let inseridos = 0;
+
+    // Fazemos um loop manual ao invés de transaction genérica
+    // para garantir que cada personagem será checado e inserido se não existir
+    for (const char of characterCatalog) {
+        // Verifica se o personagem já existe pelo slug
+        const existente = db.prepare('SELECT id FROM character_catalog WHERE slug = ?').get(char.slug);
+
+        if (!existente) {
+            // Se não existe, a gente insere no banco
+            db.prepare(`
+                INSERT INTO character_catalog (name, slug, rarity, element, base_damage_mult)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(char.name, char.slug, char.rarity, char.element, char.mult);
+            inseridos++;
+        }
     }
 
-    const insert = db.prepare(`
-        INSERT OR IGNORE INTO character_catalog (name, slug, rarity, element, base_damage_mult)
-        VALUES (?, ?, ?, ?, ?)
-    `);
-
-    const transaction = db.transaction((chars) => {
-        for (const char of chars) {
-            insert.run(char.name, char.slug, char.rarity, char.element, char.mult);
-        }
-    });
-
-    try {
-        transaction(characterCatalog);
-        console.log(`[Gacha Seed] ✅ Sucesso! Foram inseridos ${characterCatalog.length} personagens lendários na base.`);
-    } catch (error) {
-        console.error('[Gacha Seed] ❌ Erro ao povoar os personagens:', error);
+    if (inseridos > 0) {
+        console.log(`[Gacha Seed] ✅ Sucesso! Foram inseridos ${inseridos} NOVOS personagens lendários na base.`);
+    } else {
+        console.log(`[Gacha Seed] ⚠️ Nenhum personagem inserido. Os 300 guerreiros já estavam no banco de dados.`);
     }
 }
 
