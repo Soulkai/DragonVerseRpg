@@ -43,6 +43,7 @@ const { capturarCommand } = require('./commands/capturar');
 const { raidCommand } = require('./commands/raid');
 const { boxCommand } = require('./commands/box');
 const { dviCommand } = require('./commands/dvi');
+const { mercadoNegroCommand } = require('./commands/mercadoNegro'); // 🌑 NOVO: Importando Mercado Negro
 const { gachaAtivarCommand } = require('./commands/gachaAdmin');
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
@@ -62,6 +63,7 @@ const client = new Client({
     puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
 });
 
+// 3. Lógica de Manutenção
 let lastMaintenanceAt = 0;
 function runMaintenanceIfNeeded(force = false) {
     const now = Date.now();
@@ -98,7 +100,7 @@ client.on('message', async (message) => {
     try {
         const groupId = message.from;
         
-        // >> LÓGICA DE SPAWN INTEGRADA E ATIVÁVEL <<
+        // >> LÓGICA DE SPAWN (50 mensagens) <<
         const gachaConfig = db.prepare('SELECT is_enabled FROM gacha_chats WHERE chat_id = ?').get(groupId);
         if (gachaConfig && gachaConfig.is_enabled) {
             if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
@@ -116,12 +118,15 @@ client.on('message', async (message) => {
         touchPlayerActivity(message);
 
         switch (command.name) {
+            // >> NOVOS COMANDOS <<
             case 'capturar': case 'capture': await capturarCommand(message, command); break;
             case 'raid': case 'raids': await raidCommand(message, command); break;
             case 'box': case 'boxe': case 'colecao': case 'coleção': await boxCommand(message, command); break;
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
             case 'ativargacha': case 'ativar gacha': case 'gacha': await gachaAtivarCommand(message, command); break;
+            case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break; // 🌑 Integrado!
             
+            // ... (restante dos cases)
             case 'registro': await registroCommand(message, command); break;
             case 'personagens': await personagensCommand(message, command); break;
             case 'players': case 'jogadores': await playersListCommand(message, command, client); break;
