@@ -43,7 +43,8 @@ const { capturarCommand } = require('./commands/capturar');
 const { raidCommand } = require('./commands/raid');
 const { boxCommand } = require('./commands/box');
 const { dviCommand } = require('./commands/dvi');
-const { mercadoNegroCommand } = require('./commands/mercadoNegro'); // 🌑 NOVO: Importando Mercado Negro
+const { mercadoNegroCommand } = require('./commands/mercadoNegro');
+const { animeCommand, animeEpCommand } = require('./commands/anime'); // 📺 NOVO: Importando Comandos de Anime
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
 
@@ -99,18 +100,18 @@ client.on('message', async (message) => {
     try {
         const groupId = message.from;
         
-// >> LÓGICA DE SPAWN (50 mensagens) - UNIFICADA <<
-// Consultamos a tabela event_chats (a mesma do seu runAutoEvents)
-const eventConfig = db.prepare('SELECT is_enabled FROM event_chats WHERE chat_id = ?').get(groupId);
+        // >> LÓGICA DE SPAWN (50 mensagens) - UNIFICADA <<
+        // Consultamos a tabela event_chats (a mesma do seu runAutoEvents)
+        const eventConfig = db.prepare('SELECT is_enabled FROM event_chats WHERE chat_id = ?').get(groupId);
 
-if (eventConfig && eventConfig.is_enabled) {
-    if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
-    groupMessageCount[groupId]++;
-    if (groupMessageCount[groupId] >= 25) {
-        groupMessageCount[groupId] = 0;
-        if (Math.random() > 0.5) await spawnCharacter(client, groupId).catch(e => console.error('[SPAWN ERRO]', e));
-    }
-}
+        if (eventConfig && eventConfig.is_enabled) {
+            if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
+            groupMessageCount[groupId]++;
+            if (groupMessageCount[groupId] >= 25) {
+                groupMessageCount[groupId] = 0;
+                if (Math.random() > 0.5) await spawnCharacter(client, groupId).catch(e => console.error('[SPAWN ERRO]', e));
+            }
+        }
 
         const command = parseCommand(message.body || '', settings.prefixes);
         if (!command) return;
@@ -124,7 +125,17 @@ if (eventConfig && eventConfig.is_enabled) {
             case 'raid': case 'raids': await raidCommand(message, command); break;
             case 'box': case 'boxe': case 'colecao': case 'coleção': await boxCommand(message, command); break;
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
-            case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break; // 🌑 Integrado!
+            case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break;
+            
+            // 📺 COMANDOS DE ANIME INTEGRADOS
+            case 'anime':
+            case 'anime2': 
+                await animeCommand(message, command); 
+                break;
+            case 'animeep':
+            case 'animeep2': 
+                await animeEpCommand(message, command); 
+                break;
             
             // ... (restante dos cases)
             case 'registro': await registroCommand(message, command); break;
