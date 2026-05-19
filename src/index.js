@@ -43,7 +43,7 @@ const { capturarCommand } = require('./commands/capturar');
 const { raidCommand } = require('./commands/raid');
 const { boxCommand } = require('./commands/box');
 const { dviCommand } = require('./commands/dvi');
-const { mercadoNegroCommand } = require('./commands/mercadoNegro'); 
+const { mercadoNegroCommand } = require('./commands/mercadoNegro');
 const { toggleEventosCommand } = require('./commands/eventosAdmin'); // Unificado
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
@@ -100,10 +100,9 @@ client.on('message', async (message) => {
     try {
         const groupId = message.from;
         
-        // >> LÓGICA UNIFICADA: SPAWN + EVENTOS <<
+        // >> LÓGICA DE SPAWN + EVENTOS UNIFICADA <<
         const eventConfig = db.prepare('SELECT is_enabled FROM event_chats WHERE chat_id = ?').get(groupId);
         if (eventConfig && eventConfig.is_enabled) {
-            // Spawn Gacha
             if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
             groupMessageCount[groupId]++;
             if (groupMessageCount[groupId] >= 50) {
@@ -125,7 +124,7 @@ client.on('message', async (message) => {
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
             case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break;
             case 'ativareventos': case 'eventos': case 'ativargacha': case 'gacha': await toggleEventosCommand(message, command); break;
-            
+
             // ... (restante dos comandos)
             case 'registro': await registroCommand(message, command); break;
             case 'personagens': await personagensCommand(message, command); break;
@@ -187,7 +186,7 @@ client.on('message', async (message) => {
             case 'pegar': await pegarCommand(message, command, client); break;
             case 'tigrinho': case 'cassino': case 'cacaniquel': case 'caçaníquel': await tigrinhoCommand(message, command, client); break;
             case 'menu': case 'ajuda': case 'comandos': await helpCommand(message, command); break;
-            case 'help': await message.reply('Esse comando mudou para */menu*.'); break;
+            case 'help': await message.reply('Esse comando mudou para /menu .'); break;
             case 'blackjack': case 'bj': await blackjackCommand(message, command, client); break;
             case 'carta': case 'hit': case 'parar': await blackjackCommand(message, { ...command, argsText: command.name }, client); break;
             case 'poker': await pokerCommand(message, command, client); break;
