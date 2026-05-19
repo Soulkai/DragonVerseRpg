@@ -3,18 +3,24 @@ const { getOrCreatePlayerFromMessage } = require('../services/playerService');
 
 async function boxCommand(message, command) {
     try {
-        // Pega ou cria o jogador instantaneamente
+        // Pega ou cria o lutador no ecossistema
         const player = getOrCreatePlayerFromMessage(message);
         if (!player) return;
 
-        // Busca todos os guerreiros capturados pelo jogador ordenados por Raridade
+        // 🛠️ CONSULTA ADAPTADA: Usando exatamente as colunas da sua estrutura oficial
         const collection = db.prepare(`
-            SELECT c.name, c.slug, c.rarity, c.element, pc.level, pc.duplicates
-            FROM player_collection pc
-            JOIN character_catalog c ON pc.character_id = c.id
-            WHERE pc.player_id = ?
+            SELECT 
+                catalog.name, 
+                catalog.slug, 
+                catalog.rarity, 
+                catalog.element, 
+                coll.level, 
+                coll.duplicates
+            FROM player_collection coll
+            JOIN character_catalog catalog ON catalog.id = coll.character_id
+            WHERE coll.player_id = ?
             ORDER BY 
-                CASE c.rarity
+                CASE catalog.rarity
                     WHEN 'Godly' THEN 1
                     WHEN 'LR' THEN 2
                     WHEN 'UR' THEN 3
@@ -25,22 +31,22 @@ async function boxCommand(message, command) {
                     WHEN 'U' THEN 8
                     WHEN 'C' THEN 9
                     ELSE 10
-                END ASC, c.name ASC
+                END ASC, catalog.name ASC
         `).all(player.id);
 
-        // Se a box estiver vazia, avisa o guerreiro
+        // Se a box estiver vazia, avisa o guerreiro com as instruções de spawn
         if (collection.length === 0) {
             return message.reply("🎒 *Sua Box está vazia!*\n\nFique atento ao chat! Quando um alerta de Ki surgir, use o comando *!capturar* para iniciar sua coleção.");
         }
 
-        // Agrupa os personagens por raridade em memória para formatar o texto
+        // Agrupa os guerreiros por rank de poder em memória
         const grouped = {};
         collection.forEach(char => {
             if (!grouped[char.rarity]) grouped[char.rarity] = [];
             grouped[char.rarity].push(char);
         });
 
-        // Emojis temáticos para cada tier de poder
+        // Design visual clássico baseado nas caixas do seu RPG
         const rarityIcons = {
             'Godly': '👑', 'LR': '🔱', 'UR': '💎', 'SSS': '🔥',
             'SS': '⚡', 'S': '✨', 'R': '⭐', 'U': '🔸', 'C': '🔹'
@@ -54,7 +60,7 @@ async function boxCommand(message, command) {
             ''
         ];
 
-        // Varre as raridades na ordem de importância
+        // Varre na ordem do meta-game (Mais fortes para os mais fracos)
         const order = ['Godly', 'LR', 'UR', 'SSS', 'SS', 'S', 'R', 'U', 'C'];
         for (const rarity of order) {
             if (grouped[rarity] && grouped[rarity].length > 0) {
@@ -62,8 +68,8 @@ async function boxCommand(message, command) {
                 lines.push(`${icon} *RANK ${rarity}*`);
                 
                 grouped[rarity].forEach(char => {
+                    // Soma 1 (o original) + as duplicatas para mostrar o acúmulo real
                     const totalAmount = 1 + (char.duplicates || 0);
-                    // Se o jogador tiver repetidos, mostra a quantidade acumulada
                     const duplicateStr = totalAmount > 1 ? ` *(x${totalAmount})*` : '';
                     lines.push(`  ▢ \`${char.slug}\` - ${char.name} [${char.element}]${duplicateStr}`);
                 });
