@@ -5,6 +5,16 @@ const { migrate } = require('./database/migrate');
 const { parseCommand } = require('./utils/text');
 const db = require('./database/db'); 
 
+// ==========================================
+// 🛡️ ESCUDO ANTI-CRASH (Evita que o bot desligue do nada)
+// ==========================================
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️ [ANTI-CRASH] Oscilação de rede detectada (Unhandled Rejection):', reason);
+});
+process.on('uncaughtException', (error) => {
+    console.error('⚠️ [ANTI-CRASH] Erro crítico evitado (Uncaught Exception):', error);
+});
+
 // --- Importação de Comandos ---
 const { registroCommand } = require('./commands/registro');
 const { personagensCommand } = require('./commands/personagens');
@@ -44,7 +54,7 @@ const { raidCommand } = require('./commands/raid');
 const { boxCommand } = require('./commands/box');
 const { dviCommand } = require('./commands/dvi');
 const { mercadoNegroCommand } = require('./commands/mercadoNegro');
-const { animeCommand, animeEpCommand } = require('./commands/anime'); // 📺 NOVO: Importando Comandos de Anime
+const { animeCommand, animeEpCommand } = require('./commands/anime'); 
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
 
@@ -58,9 +68,22 @@ const { processExpiredTravels } = require('./services/travelService');
 
 migrate();
 
+// ==========================================
+// 🌐 CONFIGURAÇÃO DO CLIENTE (Revisada)
+// ==========================================
 const client = new Client({
     authStrategy: new LocalAuth({ clientId: 'dragonverse-rpg', dataPath: './.wwebjs_auth' }),
-    puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+    authTimeoutMs: 90000, // ⏳ Tolerância maior para conexões instáveis
+    puppeteer: { 
+        headless: true, 
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage', // Previne estouro de memória no background
+            '--disable-accelerated-2d-canvas',
+            '--disable-gpu'
+        ] 
+    },
 });
 
 // 3. Lógica de Manutenção
