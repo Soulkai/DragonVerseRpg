@@ -43,8 +43,8 @@ const { capturarCommand } = require('./commands/capturar');
 const { raidCommand } = require('./commands/raid');
 const { boxCommand } = require('./commands/box');
 const { dviCommand } = require('./commands/dvi');
-const { mercadoNegroCommand } = require('./commands/mercadoNegro'); // 🌑 NOVO: Importando Mercado Negro
-const { gachaAtivarCommand } = require('./commands/gachaAdmin');
+const { mercadoNegroCommand } = require('./commands/mercadoNegro'); 
+const { toggleEventosCommand } = require('./commands/eventosAdmin'); // Unificado
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
 
@@ -100,9 +100,10 @@ client.on('message', async (message) => {
     try {
         const groupId = message.from;
         
-        // >> LÓGICA DE SPAWN (50 mensagens) <<
-        const gachaConfig = db.prepare('SELECT is_enabled FROM gacha_chats WHERE chat_id = ?').get(groupId);
-        if (gachaConfig && gachaConfig.is_enabled) {
+        // >> LÓGICA UNIFICADA: SPAWN + EVENTOS <<
+        const eventConfig = db.prepare('SELECT is_enabled FROM event_chats WHERE chat_id = ?').get(groupId);
+        if (eventConfig && eventConfig.is_enabled) {
+            // Spawn Gacha
             if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
             groupMessageCount[groupId]++;
             if (groupMessageCount[groupId] >= 50) {
@@ -118,15 +119,14 @@ client.on('message', async (message) => {
         touchPlayerActivity(message);
 
         switch (command.name) {
-            // >> NOVOS COMANDOS <<
             case 'capturar': case 'capture': await capturarCommand(message, command); break;
             case 'raid': case 'raids': await raidCommand(message, command); break;
             case 'box': case 'boxe': case 'colecao': case 'coleção': await boxCommand(message, command); break;
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
-            case 'ativargacha': case 'ativar gacha': case 'gacha': await gachaAtivarCommand(message, command); break;
-            case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break; // 🌑 Integrado!
+            case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break;
+            case 'ativareventos': case 'eventos': case 'ativargacha': case 'gacha': await toggleEventosCommand(message, command); break;
             
-            // ... (restante dos cases)
+            // ... (restante dos comandos)
             case 'registro': await registroCommand(message, command); break;
             case 'personagens': await personagensCommand(message, command); break;
             case 'players': case 'jogadores': await playersListCommand(message, command, client); break;
