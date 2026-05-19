@@ -3,7 +3,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const settings = require('./config/settings');
 const { migrate } = require('./database/migrate');
 const { parseCommand } = require('./utils/text');
-const db = require('./database/db'); // Importante para o check do banco
+const db = require('./database/db'); 
 
 // --- Importação de Comandos ---
 const { registroCommand } = require('./commands/registro');
@@ -43,7 +43,7 @@ const { capturarCommand } = require('./commands/capturar');
 const { raidCommand } = require('./commands/raid');
 const { boxCommand } = require('./commands/box');
 const { dviCommand } = require('./commands/dvi');
-const { gachaAtivarCommand } = require('./commands/gachaAdmin'); // Comando para ativar
+const { gachaAtivarCommand } = require('./commands/gachaAdmin');
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
 
@@ -62,7 +62,6 @@ const client = new Client({
     puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
 });
 
-// 3. Lógica de Manutenção
 let lastMaintenanceAt = 0;
 function runMaintenanceIfNeeded(force = false) {
     const now = Date.now();
@@ -101,7 +100,6 @@ client.on('message', async (message) => {
         
         // >> LÓGICA DE SPAWN INTEGRADA E ATIVÁVEL <<
         const gachaConfig = db.prepare('SELECT is_enabled FROM gacha_chats WHERE chat_id = ?').get(groupId);
-
         if (gachaConfig && gachaConfig.is_enabled) {
             if (!groupMessageCount[groupId]) groupMessageCount[groupId] = 0;
             groupMessageCount[groupId]++;
@@ -118,14 +116,12 @@ client.on('message', async (message) => {
         touchPlayerActivity(message);
 
         switch (command.name) {
-            // >> NOVOS COMANDOS <<
             case 'capturar': case 'capture': await capturarCommand(message, command); break;
             case 'raid': case 'raids': await raidCommand(message, command); break;
             case 'box': case 'boxe': case 'colecao': case 'coleção': await boxCommand(message, command); break;
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
             case 'ativargacha': case 'ativar gacha': case 'gacha': await gachaAtivarCommand(message, command); break;
-
-            // ... (restante dos comandos)
+            
             case 'registro': await registroCommand(message, command); break;
             case 'personagens': await personagensCommand(message, command); break;
             case 'players': case 'jogadores': await playersListCommand(message, command, client); break;
