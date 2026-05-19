@@ -41,6 +41,7 @@ const { viagemCommand } = require('./commands/viagem');
 // >> NOVOS SISTEMAS E COMANDOS <<
 const { capturarCommand } = require('./commands/capturar');
 const { raidCommand } = require('./commands/raid');
+const { boxCommand } = require('./commands/box'); // Adicionado o import da Box!
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
 
@@ -52,8 +53,10 @@ const { runAutoEvents } = require('./services/eventService');
 const { spotifySearch, spotifyDownload } = require('./services/spotifyService');
 const { processExpiredTravels } = require('./services/travelService');
 
+// 1. Inicializar Banco de Dados
 migrate();
 
+// 2. Inicializar o Client ANTES das manutenções
 const client = new Client({
     authStrategy: new LocalAuth({ clientId: 'dragonverse-rpg', dataPath: './.wwebjs_auth' }),
     puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] },
@@ -104,7 +107,7 @@ client.on('message', async (message) => {
         groupMessageCount[groupId]++;
         if (groupMessageCount[groupId] >= 50) {
             groupMessageCount[groupId] = 0;
-            if (Math.random() > 0.5) await spawnCharacter(client, groupId);
+            if (Math.random() > 0.5) await spawnCharacter(client, groupId).catch(e => console.error('[SPAWN ERRO]', e));
         }
 
         const command = parseCommand(message.body || '', settings.prefixes);
@@ -115,8 +118,14 @@ client.on('message', async (message) => {
 
         switch (command.name) {
             // >> NOVOS COMANDOS <<
-            case 'capturar': await capturarCommand(message, command); break;
-            case 'raid': await raidCommand(message, command); break;
+            case 'capturar': 
+            case 'capture': await capturarCommand(message, command); break;
+            case 'raid': 
+            case 'raids': await raidCommand(message, command); break;
+            case 'box':
+            case 'boxe':
+            case 'colecao':
+            case 'coleção': await boxCommand(message, command); break; // Adicionado os cases da Box!
             
             // ... (restante dos seus cases anteriores)
             case 'registro': await registroCommand(message, command); break;
