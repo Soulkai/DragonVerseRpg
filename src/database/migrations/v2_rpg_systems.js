@@ -110,6 +110,11 @@ function migrateV2() {
             FOREIGN KEY(raid_id) REFERENCES raid_bosses(id) ON DELETE CASCADE,
             FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE
         );
+
+      CREATE TABLE IF NOT EXISTS gacha_chats (
+          chat_id TEXT PRIMARY KEY,
+          is_enabled BOOLEAN DEFAULT 0
+);       
     `);
 
     console.log('✅ Migração V2 concluída: Tabelas de Inventário, Mercado, Raids e DVI prontas!');
