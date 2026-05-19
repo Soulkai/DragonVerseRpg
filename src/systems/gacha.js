@@ -33,15 +33,15 @@ function attemptCapture(groupId, playerId) {
         return { success: false, message: "💨 Não há nenhum guerreiro por aqui, ou ele já fugiu usando o teletransporte!" };
     }
 
-    // Verifica se o jogador tem a Cápsula de Captura (item_id 1)
-    const capsule = db.prepare('SELECT quantity FROM player_inventory WHERE player_id = ? AND item_id = 1').get(playerId);
+    // ⚠️ ATUALIZADO: Agora busca pelo ID de texto 'capsula-comum'
+    const capsule = db.prepare("SELECT quantity FROM player_inventory WHERE player_id = ? AND item_id = 'capsula-comum'").get(playerId);
     
     if (!capsule || capsule.quantity <= 0) {
         return { success: false, message: "🎒 Você não tem *Cápsulas da Corporação*! Compre na loja antes de tentar capturar." };
     }
 
-    // Gasta 1 cápsula do jogador
-    db.prepare('UPDATE player_inventory SET quantity = quantity - 1 WHERE player_id = ? AND item_id = 1').run(playerId);
+    // ⚠️ ATUALIZADO: Gasta 1 cápsula do jogador usando o ID de texto correto
+    db.prepare("UPDATE player_inventory SET quantity = quantity - 1 WHERE player_id = ? AND item_id = 'capsula-comum'").run(playerId);
 
     // Tabela de chances baseada no seu sistema
     const captureChances = {
