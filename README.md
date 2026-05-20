@@ -29,14 +29,14 @@
 
 ## 🔎 Sobre o projeto
 
-DragonVerse é um bot de WhatsApp multi-device para **RPG de Dragon Ball**, com economia avançada, gacha, raids, torneios, jogos de cartas e eventos automáticos, tudo persistido em **SQLite** com migrations e seeds próprios.
+DragonVerse é um bot de WhatsApp multi-device para **RPG de Dragon Ball**, com economia avançada, sistema de spawn/captura de guerreiros, raids, torneios, jogos de cartas e eventos automáticos, tudo persistido em **SQLite** com migrations e seeds próprios.
 
 Arquitetura principal:
 
 - `src/index.js` → entrypoint, anti-crash, roteamento de comandos e manutenção automática.
 - `src/commands/` → camada de comandos (interface de texto com o jogador/admin).
 - `src/services/` → regras de negócio (economia, eventos, ranked, torneios, shop, etc.).
-- `src/systems/` → sistemas centrais (gacha, raids, DVI/ricos).
+- `src/systems/` → sistemas centrais (spawn/captura, raids, DVI/ricos).
 - `src/data/` → dados estáticos (loja, cargos, eventos, lista de personagens).
 - `src/database/` → SQLite, migrations, seeds de gacha e itens.
 - `src/utils/` → utils de admin, formatos, menções, parse de comandos.
@@ -47,13 +47,15 @@ Arquitetura principal:
 
 - 🔐 **RPG de personagens**: registro por universo, lista de personagens livres/bloqueados, troca com custo em Zenies, cargos principais e supremos.
 - 💰 **Economia completa**: Zenies, salários automáticos, depósito com juros, empréstimos, PIX entre jogadores, extrato detalhado, mercado paralelo (Z-Market / mercado negro).
-- 🎰 **Gacha & Caixas**:
-  - Sistema de gacha com seed no banco (banners/pools), usado para spawn de personagens em grupos.
-  - Sistema de caixas/loot (`/box`, `/caixa`) com serviço próprio para abertura e recompensas.
+- 🐲 **Spawn & Captura de Guerreiros**:
+  - A cada 25 mensagens em grupos com eventos ativos, há 50% de chance de um guerreiro selvagem aparecer.
+  - O guerreiro fica disponível por 10 minutos com nome, raridade e elemento.
+  - Jogadores tentam capturar usando itens de captura (Cápsula da Corporação ou Selo Mafuba).
+  - Selo Mafuba dá bônus de captura; em caso de sucesso, o personagem entra na coleção do jogador.
 - 🎯 **Eventos de RPG**: perguntas, forca, desafio rápido, emoji do dragão, pergunta relâmpago, limite diário por jogador/chat, ranking de eventos e presença.
 - 🧩 **Minigames e jogos de cartas**: Blackjack, Poker (Texas Hold’em), Truco paulista limpo, Tigrinho/slots com vários símbolos e multiplicadores.
 - 🏆 **Ranked, torneios e raids**: partidas ranqueadas com ranking, torneios gerados pelo bot e sistema de raids automatizadas.
-- 🎯 **Bounty & recompensas**: sistema de caça à cabeça, recompensas configuráveis, caixas, streak de atividade e reward service.
+- 🎯 **Bounty & recompensas**: sistema de caça à cabeça, recompensas configuráveis, streak de atividade e reward service.
 - 📡 **Integrações extras**: comandos de anime, busca/preview no Spotify, convites, menções clicáveis com JID real.
 
 ---
@@ -129,6 +131,12 @@ Inventário e loja:
 /inventario
 ```
 
+Coleção de guerreiros capturados:
+
+```txt
+/box                           # mostra os personagens que você já capturou
+```
+
 ---
 
 ## 🛡️ Comandos administrativos (RPG)
@@ -187,24 +195,29 @@ A economia é persistida com ledger (`transfer_history`), juros de depósito a c
 
 ---
 
-## 🎰 Gacha, caixas e spawns
+## 🐲 Sistema de spawn e captura
 
-DragonVerse tem dois sistemas principais de sorteio:
+Fluxo básico:
 
-1. **Gacha de personagens** (sistema global)
-   - Seeds configuradas em `database/seedGacha.js` e engine em `systems/gacha.js`.
-   - O `index.js` chama `spawnCharacter(client, groupId)` quando um grupo com eventos ativados atinge um certo número de mensagens.
-   - Pode ser usado em conjunto com comandos de captura.
+1. Em grupos com eventos ativados (`/eventos ativar`), o bot conta mensagens por chat.
+2. A cada **25 mensagens**, ele faz um sorteio com **50% de chance** de spawnar um guerreiro.
+3. Se spawnar, o guerreiro fica disponível por **10 minutos** com nome, raridade e elemento.
+4. Durante esse tempo, os jogadores podem tentar capturar:
 
-2. **Caixas (loot box)**
-   - Comandos:
-     ```txt
-     /box
-     /caixa
-     ```
-   - Lógica em `boxService.js`, com droptables e integração com economia/inventário.
+```txt
+/capturar
+```
 
-Há também ferramentas admin (`gachaAdmin.js`, `runGacha.js`) para manutenção e testes de gacha.
+Regras de captura:
+
+- É necessário ter itens de captura no inventário (`player_inventory`):
+  - **Cápsula da Corporação**
+  - **Selo Mafuba** (dá bônus na chance de captura)
+- A chance base depende da raridade (C, U, R, S, SS, SSS, UR, LR, Godly).
+- Em caso de sucesso, o personagem vai para a sua coleção (`player_collection`).
+- Em caso de falha, o guerreiro **continua** spawnado até expirar o tempo.
+
+Use `/box` para ver os guerreiros que você já capturou.
 
 ---
 
@@ -485,7 +498,7 @@ Seeds/scripts úteis:
 
 - `database/seedGacha.js` → popula pools de gacha.
 - `database/seedItems.js` → popula itens da loja.
-- `database/runGacha.js` → utilitário para testar o gacha via CLI.
+- `database/runGacha.js` → utilitário para testar o sistema de spawn/captura via CLI.
 - `database/runMigrations.js` → executa migrations de schema.
 
 ---
