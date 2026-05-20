@@ -1,8 +1,12 @@
-# DragonVerse WhatsApp Bot
+# 🐉 DragonVerse WhatsApp Bot
 
-Bot para RPG de Dragon Ball usando **Node.js**, **whatsapp-web.js** e **SQLite**.
+> Bot para RPG de Dragon Ball usando **Node.js**, **whatsapp-web.js** e **SQLite**.
 
-## O que esta versão já tem
+![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen?logo=node.js) ![License](https://img.shields.io/badge/license-MIT-blue) ![WhatsApp](https://img.shields.io/badge/whatsapp--web.js-1.34.7-25D366?logo=whatsapp) ![SQLite](https://img.shields.io/badge/SQLite-better--sqlite3-003B57?logo=sqlite)
+
+---
+
+## ✅ O que esta versão já tem
 
 - Registro de personagem por universo.
 - Personagens livres, ocupados e bloqueados.
@@ -21,7 +25,9 @@ Bot para RPG de Dragon Ball usando **Node.js**, **whatsapp-web.js** e **SQLite**
 - Remoção automática do personagem após 3 meses de inatividade.
 - Perfil com foto, personagem, Ki, atributos totais, Zenies, depósito, cargo, trabalho e salário.
 
-## Instalação
+---
+
+## 📦 Instalação
 
 ```bash
 npm install
@@ -31,7 +37,9 @@ npm start
 
 No primeiro start, escaneie o QR Code no terminal usando o WhatsApp.
 
-## Configuração de admins
+---
+
+## ⚙️ Configuração de admins
 
 Use no WhatsApp:
 
@@ -60,10 +68,11 @@ ADMIN_NUMBERS=5567999999999,123456789@lid
 
 Depois de alterar o `.env`, reinicie o bot.
 
-Admins do `.env` podem usar os comandos administrativos mesmo sem cargo dentro do RPG.
+> Admins do `.env` podem usar os comandos administrativos mesmo sem cargo dentro do RPG.
 
+---
 
-## Configuração de fuso horário
+## 🕐 Configuração de fuso horário
 
 O bot usa o fuso horário para resetar limites diários de eventos:
 
@@ -71,7 +80,9 @@ O bot usa o fuso horário para resetar limites diários de eventos:
 TIMEZONE=America/Campo_Grande
 ```
 
-## Comandos de jogador
+---
+
+## 🎮 Comandos de jogador
 
 ```txt
 /Personagens 2
@@ -96,7 +107,9 @@ TIMEZONE=America/Campo_Grande
 /menu
 ```
 
-## Comandos administrativos
+---
+
+## 🛡️ Comandos administrativos
 
 ```txt
 /addzenies @pessoa 50000000
@@ -104,15 +117,17 @@ TIMEZONE=America/Campo_Grande
 /definirki @pessoa 5
 /addcargo @pessoa A.S
 /adduniverso 3
-/codigoresgate Bardock      # válido em qualquer universo
-/codigoresgate 2 Bardock    # válido somente no Universo 2
-/codes desconto 50 5        # desconto só na próxima compra
+/codigoresgate Bardock         # válido em qualquer universo
+/codigoresgate 2 Bardock       # válido somente no Universo 2
+/codes desconto 50 5           # desconto só na próxima compra
 /inspecionar CODIGO
 /eventos ativar
 /eventos desativar
 ```
 
-## Eventos
+---
+
+## 🎯 Eventos
 
 Use:
 
@@ -182,7 +197,7 @@ Para desativar:
 /eventos desativar
 ```
 
-#### Pegue o emoji
+#### 🐉 Pegue o emoji
 
 A cada hora, o bot pode mandar um emoji de dragão no chat:
 
@@ -204,7 +219,7 @@ ganha:
 
 O bot envia no máximo **10 emojis por dia por chat**.
 
-#### Pergunta relâmpago
+#### ⚡ Pergunta relâmpago
 
 Em 3 horários do dia, o bot pode mandar uma pergunta aleatória.
 
@@ -226,7 +241,9 @@ Por padrão, as perguntas relâmpago são tentadas nos horários locais:
 10h, 16h e 21h
 ```
 
-## Loja
+---
+
+## 🛒 Loja
 
 Use:
 
@@ -264,10 +281,10 @@ Ki 11+ = 10.000.000.000 Zenies por nível
 
 ```txt
 Semente dos Deuses = 10.000.000.000 Zenies
-Scouter = 350.000.000 Zenies
-Nave Espacial = 3.500.000.000 Zenies
-Cauda Saiyajin = 1.000.000.000 Zenies
-Nuvem Voadora = 1.000.000.000 Zenies
+Scouter            = 350.000.000 Zenies
+Nave Espacial      = 3.500.000.000 Zenies
+Cauda Saiyajin     = 1.000.000.000 Zenies
+Nuvem Voadora      = 1.000.000.000 Zenies
 ```
 
 Exemplos:
@@ -282,7 +299,9 @@ Exemplos:
 
 Os itens comprados ficam salvos em `player_inventory`.
 
-## Inventário
+---
+
+## 🎒 Inventário
 
 Use:
 
@@ -292,19 +311,23 @@ Use:
 
 O bot mostra quantos itens o jogador possui.
 
-## Permissões de cargos
+---
+
+## 👑 Permissões de cargos
 
 ### Cargos Supremos
 
 Estes cargos não ocupam personagem comum do universo. O personagem deles entra na lista da Alta Cúpula e não pode se repetir entre outros cargos supremos.
 
-- `A.S` — Autoridade Suprema
-- `S.M` — Supremo Ministro
-- `HAKAI` — Hakaishin
-- `ANJO` — Anjo
-- `G.K` — Grande Kaioshin
+| Sigla | Cargo |
+|---|---|
+| `A.S` | Autoridade Suprema |
+| `S.M` | Supremo Ministro |
+| `HAKAI` | Hakaishin |
+| `ANJO` | Anjo |
+| `G.K` | Grande Kaioshin |
 
-Apenas **Autoridade Suprema**, **Supremo Ministro** ou admins do `.env` podem adicionar cargos supremos.
+> Apenas **Autoridade Suprema**, **Supremo Ministro** ou admins do `.env` podem adicionar cargos supremos.
 
 ### Lideranças de universo
 
@@ -312,30 +335,38 @@ Hakaishin, Anjo e Grande Kaioshin podem adicionar cargos não supremos a jogador
 
 ### Cargos principais
 
-- `L.I` — Lutador Iniciante
-- `KAMI` — Kami-sama
-- `KAIOH` — Kaioh
-- `G.KAIOH` — Grande Kaioh
-- `KAIO` — Kaioshin
+| Sigla | Cargo |
+|---|---|
+| `L.I` | Lutador Iniciante |
+| `KAMI` | Kami-sama |
+| `KAIOH` | Kaioh |
+| `G.KAIOH` | Grande Kaioh |
+| `KAIO` | Kaioshin |
 
 ### Trabalhos / cargos secundários
 
-- `L.E` — Líder da Elaboração
-- `ELAB` — Elaborador
-- `J.O` — Juíz Oficial
-- `RANK` — Rankeador
-- `T.K` — Treinador (Kaioh)
-- `L.J` — Líder do Jornal
-- `JORNAL` — Jornalista
-- `SITE` — Atualizador do site
+| Sigla | Cargo |
+|---|---|
+| `L.E` | Líder da Elaboração |
+| `ELAB` | Elaborador |
+| `J.O` | Juíz Oficial |
+| `RANK` | Rankeador |
+| `T.K` | Treinador (Kaioh) |
+| `L.J` | Líder do Jornal |
+| `JORNAL` | Jornalista |
+| `SITE` | Atualizador do site |
 
-## Salários
+---
+
+## 💰 Salários
 
 O salário cai automaticamente a cada 2 dias, quando o bot estiver rodando. O bot também verifica pagamentos pendentes ao iniciar.
 
 Se o jogador tiver um cargo principal e um trabalho secundário, o salário total mostrado no perfil é a soma dos dois.
 
-## Depósito
+---
+
+## 🏦 Depósito
 
 Use:
 
@@ -343,9 +374,11 @@ Use:
 /depositar 50000000
 ```
 
-O valor sai dos Zenies disponíveis e entra no depósito. A cada 4 dias, o depósito gera 25% de juros que vão para o saldo de Zenies.
+O valor sai dos Zenies disponíveis e entra no depósito. A cada 4 dias, o depósito gera **25% de juros** que vão para o saldo de Zenies.
 
-## Ki e atributos
+---
+
+## ⚡ Ki e atributos
 
 Todo jogador começa com:
 
@@ -363,11 +396,15 @@ Ki 01 = 4.000.000 atributos
 Ki 05 = 20.000.000 atributos
 ```
 
-## Inatividade
+---
 
-Se uma conta ficar 3 meses sem usar comandos do bot, o personagem dela é apagado automaticamente e volta a ficar livre.
+## ⏳ Inatividade
 
-## Banco de dados
+Se uma conta ficar **3 meses** sem usar comandos do bot, o personagem dela é apagado automaticamente e volta a ficar livre.
+
+---
+
+## 🗄️ Banco de dados
 
 O SQLite é criado automaticamente em:
 
@@ -391,7 +428,9 @@ event_chat_daily_stats
 active_events
 ```
 
-## Fotos dos personagens
+---
+
+## 🖼️ Fotos dos personagens
 
 Coloque imagens PNG nesta pasta:
 
@@ -408,10 +447,11 @@ assets/personagens/broly-dbs.png
 assets/personagens/dragao-de-uma-estrela.png
 ```
 
-Se a imagem não existir, o comando `/Perfil` envia apenas o texto e mostra o caminho esperado.
+> Se a imagem não existir, o comando `/Perfil` envia apenas o texto e mostra o caminho esperado.
 
+---
 
-## Atualização v7 — personagens, troca e tigrinho
+## 🔄 Atualização v7 — Personagens, troca e Tigrinho
 
 ### Lista oficial do Universo 2
 
@@ -432,9 +472,9 @@ A lista inicial do Universo 2 foi atualizada conforme a versão enviada, incluin
 /Trocarpersonagem Nome do Personagem
 ```
 
-`/Trocarpersonagem` só permite trocar para personagem livre do mesmo universo. A troca custa 25% dos Zenies atuais do jogador.
+> `/Trocarpersonagem` só permite trocar para personagem livre do mesmo universo. A troca custa **25% dos Zenies** atuais do jogador.
 
-### Novo evento: Tigrinho
+### Novo evento: 🎰 Tigrinho
 
 ```txt
 /tigrinho valorapostado
@@ -442,17 +482,18 @@ A lista inicial do Universo 2 foi atualizada conforme a versão enviada, incluin
 
 Regras:
 
-- Aposta mínima: 1.000.000 Zenies.
+- Aposta mínima: `1.000.000 Zenies`.
 - Sem limite máximo, desde que o jogador tenha saldo.
-- Cada jogador pode apostar 3 vezes por dia.
+- Cada jogador pode apostar `3 vezes por dia`.
 - 3 dragões 🐉 = recebe 2x a aposta.
 - 6 dragões 🐉 = recebe 5x a aposta.
 - 9 dragões 🐉 = recebe 10x a aposta.
 - 3 ou mais 💩 = perde o dobro da aposta.
 - Sem combinação vencedora = perde a aposta.
 
+---
 
-## Atualização v8 — Transferência e Tigrinho novo
+## 🔄 Atualização v8 — Transferência e Tigrinho novo
 
 ### Transferência de Zenies
 
@@ -503,7 +544,9 @@ Prêmios principais:
 | 🍀 Trevo | 2x | 5x | 12x |
 | 🪙 Moeda | 2x | 3x | 6x |
 
-## Atualização v9 — Alta Cúpula não ocupa personagem comum
+---
+
+## 🔄 Atualização v9 — Alta Cúpula não ocupa personagem comum
 
 Esta versão corrige automaticamente personagens de jogadores com cargo supremo.
 
@@ -516,12 +559,14 @@ Ao iniciar o bot, a migration sincroniza `character_claims.claim_type`:
 
 Também foi atualizado o `/addcargo`: quando alguém recebe um cargo supremo, a vaga comum do universo é liberada imediatamente.
 
-## Atualização v10 — Menu, Pix e jogos de cartas
+---
+
+## 🔄 Atualização v10 — Menu, Pix e jogos de cartas
 
 ### Comandos renomeados
 
 ```txt
-/help -> /menu
+/help       -> /menu
 /transferir -> /pix
 ```
 
@@ -535,7 +580,7 @@ Se alguém usar os comandos antigos, o bot avisa o novo nome correto.
 
 Transfere Zenies entre jogadores e continua registrando a movimentação em `transfer_history`.
 
-### Blackjack
+### 🃏 Blackjack
 
 ```txt
 /blackjack iniciar 1000000
@@ -544,9 +589,9 @@ Transfere Zenies entre jogadores e continua registrando a movimentação em `tra
 /blackjack dobrar
 ```
 
-O Blackjack é jogado contra a mesa no grupo. A aposta é retirada no início da partida. Vitória paga 2x, empate devolve a aposta e Blackjack natural paga 2.5x.
+O Blackjack é jogado contra a mesa no grupo. A aposta é retirada no início da partida. Vitória paga **2x**, empate devolve a aposta e Blackjack natural paga **2.5x**.
 
-### Poker
+### ♠️ Poker
 
 ```txt
 /poker criar 1000000
@@ -561,7 +606,7 @@ O Blackjack é jogado contra a mesa no grupo. A aposta é retirada no início da
 
 O Poker usa Texas Hold'em simplificado. O bot envia as cartas de cada jogador no privado, abre as cartas comunitárias no grupo com `/poker mesa` e calcula o vencedor no showdown.
 
-### Truco Paulista limpo
+### 🎴 Truco Paulista limpo
 
 ```txt
 /truco criar valor
@@ -579,7 +624,9 @@ O Poker usa Texas Hold'em simplificado. O bot envia as cartas de cada jogador no
 
 O Truco usa baralho limpo, sem 8, 9, 10 e coringas. O bot envia as cartas no privado, mostra a vira e a manilha no grupo e controla as cartas jogadas.
 
-## Atualização v16 — Regras, mesas e menções clicáveis
+---
+
+## 🔄 Atualização v16 — Regras, mesas e menções clicáveis
 
 ### Regras dos jogos
 
