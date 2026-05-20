@@ -27,27 +27,34 @@
 
 ---
 
-## ✅ O que esta versão já tem
+## 🔎 Sobre o projeto
 
-- 🔐 Registro de personagem por universo
-- 🟢 Personagens livres, ocupados e bloqueados
-- 🗝️ Código de resgate para personagens lendários/bloqueados
-- 🗄️ Banco SQL local em SQLite
-- 🛡️ Comandos de admin para Zenies, Ki, cargos e universos
-- 👑 Sistema de cargos principais, cargos supremos e trabalhos secundários
-- 💰 Salário automático a cada 2 dias
-- 🏦 Depósito com juros de 25% a cada 4 dias
-- 🛒 Loja com compra de Ki e itens especiais
-- 🎒 Inventário SQL para guardar itens comprados
-- 🎯 Sistema de eventos manuais com limite diário
-- ❓ Perguntas de Dragon Ball com alternativas A, B, C e D
-- 🔡 Forca de Dragon Ball
-- ⚡ Eventos automáticos de emoji do dragão e pergunta relâmpago
-- 🗑️ Remoção automática do personagem após 3 meses de inatividade
-- 🪪 Perfil com foto, personagem, Ki, atributos totais, Zenies, depósito, cargo, trabalho e salário
-- 🃏 Blackjack, Poker e Truco Paulista
-- 🎰 Tigrinho com múltiplos símbolos e prêmios
-- 💸 PIX entre jogadores com extrato financeiro
+DragonVerse é um bot de WhatsApp multi-device para **RPG de Dragon Ball**, com economia avançada, gacha, raids, torneios, jogos de cartas e eventos automáticos, tudo persistido em **SQLite** com migrations e seeds próprios.
+
+Arquitetura principal:
+
+- `src/index.js` → entrypoint, anti-crash, roteamento de comandos e manutenção automática.
+- `src/commands/` → camada de comandos (interface de texto com o jogador/admin).
+- `src/services/` → regras de negócio (economia, eventos, ranked, torneios, shop, etc.).
+- `src/systems/` → sistemas centrais (gacha, raids, DVI/ricos).
+- `src/data/` → dados estáticos (loja, cargos, eventos, lista de personagens).
+- `src/database/` → SQLite, migrations, seeds de gacha e itens.
+- `src/utils/` → utils de admin, formatos, menções, parse de comandos.
+
+---
+
+## ✅ Principais sistemas
+
+- 🔐 **RPG de personagens**: registro por universo, lista de personagens livres/bloqueados, troca com custo em Zenies, cargos principais e supremos.
+- 💰 **Economia completa**: Zenies, salários automáticos, depósito com juros, empréstimos, PIX entre jogadores, extrato detalhado, mercado paralelo (Z-Market / mercado negro).
+- 🎰 **Gacha & Caixas**:
+  - Sistema de gacha com seed no banco (banners/pools), usado para spawn de personagens em grupos.
+  - Sistema de caixas/loot (`/box`, `/caixa`) com serviço próprio para abertura e recompensas.
+- 🎯 **Eventos de RPG**: perguntas, forca, desafio rápido, emoji do dragão, pergunta relâmpago, limite diário por jogador/chat, ranking de eventos e presença.
+- 🧩 **Minigames e jogos de cartas**: Blackjack, Poker (Texas Hold’em), Truco paulista limpo, Tigrinho/slots com vários símbolos e multiplicadores.
+- 🏆 **Ranked, torneios e raids**: partidas ranqueadas com ranking, torneios gerados pelo bot e sistema de raids automatizadas.
+- 🎯 **Bounty & recompensas**: sistema de caça à cabeça, recompensas configuráveis, caixas, streak de atividade e reward service.
+- 📡 **Integrações extras**: comandos de anime, busca/preview no Spotify, convites, menções clicáveis com JID real.
 
 ---
 
@@ -63,42 +70,37 @@ npm start
 
 ---
 
-## ⚙️ Configuração de Admins
+## ⚙️ Configuração básica
+
+### Admins
 
 Use no WhatsApp:
 
-```
+```txt
 /meuid
 ```
 
-O bot vai mostrar:
+O bot mostra:
 
 - Se você já está sendo reconhecido como admin
 - Seu número limpo
 - Seu JID/LID completo
-- Os valores aceitos no `ADMIN_NUMBERS`
+- Os formatos aceitos em `ADMIN_NUMBERS`
 
 No `.env`, você pode usar número limpo, JID completo ou LID completo:
 
 ```env
 ADMIN_NUMBERS=5567999999999
-```
-
-Em alguns grupos, o WhatsApp entrega o remetente como `@lid`. Se o número limpo não funcionar, coloque também o LID mostrado em `/meuid`:
-
-```env
 ADMIN_NUMBERS=5567999999999,123456789@lid
 ```
 
-> ⚠️ Depois de alterar o `.env`, reinicie o bot.
+> Depois de alterar o `.env`, reinicie o bot.
 
-> 💡 Admins do `.env` podem usar os comandos administrativos mesmo sem cargo dentro do RPG.
+> Admins do `.env` podem usar comandos administrativos mesmo sem cargo dentro do RPG.
 
----
+### Fuso horário
 
-## 🕐 Fuso Horário
-
-O bot usa o fuso horário para resetar limites diários de eventos:
+O bot usa o fuso horário para resetar limites diários de eventos e alguns agendamentos:
 
 ```env
 TIMEZONE=America/Campo_Grande
@@ -106,56 +108,111 @@ TIMEZONE=America/Campo_Grande
 
 ---
 
-## 🎮 Comandos de Jogador
+## 👤 Comandos de jogador (core RPG)
 
-```
-/Personagens 2
-/Registro 2 Goku
+```txt
+/Personagens 2                 # lista de personagens do universo
+/Registro 2 Goku              # registra um personagem
 /Registro 2 Bardock DBV-XXXXXX-XXXX
-/Perfil
+/Perfil                       # mostra perfil completo
+/cargos                       # lista seus cargos
+/viagem                        # comandos de viagem/link entre chats
+```
+
+Inventário e loja:
+
+```txt
 /loja
 /comprar Ki
 /comprar Scouter
 /comprar Semente dos Deuses
 /inventario
-/depositar 50000000
-/cargos
-/eventos
-/eventos pergunta
-/eventos forca
-/eventos desafio
-/responder A
-/letra A
-/chutar Kamehameha
-/pegar
-/menu
 ```
 
 ---
 
-## 🛡️ Comandos Administrativos
+## 🛡️ Comandos administrativos (RPG)
 
+```txt
+/adduniverso 3
+/addpersonagem Nome Block
+/addpersonagem Nome Free
+/addpersonagem 3 Nome Block
+/rmvpersonagem Nome
+/rmvpersonagem 3 Nome
+/Trocarpersonagem Nome        # troca para personagem livre (25% dos Zenies)
+/addcargo @pessoa A.S
+/players                      # lista jogadores
+/deleteplayer @pessoa         # remove player do sistema
 ```
+
+Cargos supremos e liderança de universo são respeitados conforme tabela de cargos (ver seção específica abaixo).
+
+---
+
+## 💰 Economia, PIX, empréstimos e mercados
+
+Comandos de jogador:
+
+```txt
+/depositar 50000000
+/saldo
+/poupanca
+/retirarpoupanca 10000000
+/pix @pessoa 50000000
+/extrato
+/extrato entrada
+/extrato saida
+/extrato perda
+/emprestimo 1000000000
+```
+
+Comandos de admin de economia:
+
+```txt
 /addzenies @pessoa 50000000
 /retirarzenies @pessoa 50000000
 /definirki @pessoa 5
-/addcargo @pessoa A.S
-/adduniverso 3
-/codigoresgate Bardock          # válido em qualquer universo
-/codigoresgate 2 Bardock        # válido somente no Universo 2
-/codes desconto 50 5            # desconto só na próxima compra
-/inspecionar CODIGO
-/eventos ativar
-/eventos desativar
 ```
+
+Mercados especiais:
+
+```txt
+/zmarket         # Z-Market, loja especial
+/zbuy Scouter    # compra no Z-Market
+/mercadonegro    # mercado paralelo
+```
+
+A economia é persistida com ledger (`transfer_history`), juros de depósito a cada 4 dias e salários a cada 2 dias.
 
 ---
 
-## 🎯 Eventos
+## 🎰 Gacha, caixas e spawns
+
+DragonVerse tem dois sistemas principais de sorteio:
+
+1. **Gacha de personagens** (sistema global)
+   - Seeds configuradas em `database/seedGacha.js` e engine em `systems/gacha.js`.
+   - O `index.js` chama `spawnCharacter(client, groupId)` quando um grupo com eventos ativados atinge um certo número de mensagens.
+   - Pode ser usado em conjunto com comandos de captura.
+
+2. **Caixas (loot box)**
+   - Comandos:
+     ```txt
+     /box
+     /caixa
+     ```
+   - Lógica em `boxService.js`, com droptables e integração com economia/inventário.
+
+Há também ferramentas admin (`gachaAdmin.js`, `runGacha.js`) para manutenção e testes de gacha.
+
+---
+
+## 🎯 Eventos (manual e automático)
 
 Use `/eventos` para ver a lista de eventos e o status diário do jogador.
 
-### Eventos Manuais
+### Eventos manuais
 
 | Info | Valor |
 |---|---|
@@ -163,341 +220,59 @@ Use `/eventos` para ver a lista de eventos e o status diário do jogador.
 | Recompensa por acerto | 10.000.000 Zenies |
 | Máximo diário | 100.000.000 Zenies |
 
-> Se errar, não ganha nada e o evento é encerrado.
-
-### ❓ Perguntas e Respostas
-
-```
+```txt
+/eventos
 /eventos pergunta
-/responder A
-```
-
-O bot sorteia uma pergunta de Dragon Ball com alternativas A, B, C e D.
-
-### 🔡 Forca
-
-```
 /eventos forca
+/eventos desafio
+/responder A
 /letra A
 /chutar Kamehameha
+/presenca
+/rankeventos
 ```
 
-O bot sorteia uma palavra de Dragon Ball. O jogador tem **6 erros** possíveis.
+### Eventos automáticos
 
-### ⚔️ Desafio Rápido
-
-```
-/eventos desafio
-/responder B
+```txt
+/eventos ativar
+/eventos desativar
 ```
 
-O bot sorteia uma situação rápida do RPG para o jogador resolver.
+- 🐉 **Emoji do dragão**: a cada hora pode surgir um `🐉` no chat; o primeiro a `/pegar` ganha Zenies.
+- ⚡ **Pergunta relâmpago**: em horários pré-definidos, o bot envia uma pergunta rápida; o primeiro a responder ganha bônus.
 
-### 🤖 Eventos Automáticos
-
-```
-/eventos ativar     # ativa no grupo atual (admin)
-/eventos desativar  # desativa no grupo atual (admin)
-```
-
-#### 🐉 Pegue o Emoji
-
-A cada hora, o bot pode mandar `🐉` no chat. O primeiro jogador que mandar `/pegar` ganha **5.000.000 Zenies**.
-O bot envia no máximo **10 emojis por dia por chat**.
-
-#### ⚡ Pergunta Relâmpago
-
-Em 3 horários do dia (`10h`, `16h` e `21h`), o bot manda uma pergunta aleatória. O primeiro a responder corretamente com `/responder A` ganha **25.000.000 Zenies**.
+Stats diárias por player e por chat são controladas via `event_daily_stats` e `event_chat_daily_stats`.
 
 ---
 
-## 🛒 Loja
+## 🃏 Jogos de cartas e Tigrinho
 
-Use `/loja` para ver a tabela de Ki e os itens disponíveis.
+### Blackjack
 
-### Tabela de Ki
-
-| Nível | Preço |
-|---|---|
-| Ki 01 | Grátis |
-| Ki 02 | 750.000.000 Zenies |
-| Ki 03 | 1.250.000.000 Zenies |
-| Ki 04 | 1.600.000.000 Zenies |
-| Ki 05 | 2.750.000.000 Zenies |
-| Ki 06 | 3.500.000.000 Zenies |
-| Ki 07 | 4.600.000.000 Zenies |
-| Ki 08 | 5.000.000.000 Zenies |
-| Ki 09 | 7.500.000.000 Zenies |
-| Ki 10 | 10.000.000.000 Zenies |
-| Ki 11+ | 10.000.000.000 Zenies por nível |
-
-> Use `/comprar Ki` para comprar sempre o **próximo Ki** do seu personagem.
-
-### Itens Especiais
-
-| Item | Preço |
-|---|---|
-| Semente dos Deuses | 10.000.000.000 Zenies |
-| Scouter | 350.000.000 Zenies |
-| Nave Espacial | 3.500.000.000 Zenies |
-| Cauda Saiyajin | 1.000.000.000 Zenies |
-| Nuvem Voadora | 1.000.000.000 Zenies |
-
-```
-/comprar Scouter
-/comprar Nave Espacial
-/comprar Cauda Saiyajin
-/comprar Nuvem Voadora
-/comprar Semente dos Deuses
-```
-
-> Os itens comprados ficam salvos em `player_inventory`.
-
----
-
-## 🎒 Inventário
-
-```
-/inventario
-```
-
-O bot mostra quantos itens o jogador possui.
-
----
-
-## 👑 Cargos e Permissões
-
-### Cargos Supremos
-
-Estes cargos **não ocupam personagem comum** do universo. Entram na lista da Alta Cúpula.
-
-| Sigla | Cargo |
-|---|---|
-| `A.S` | Autoridade Suprema |
-| `S.M` | Supremo Ministro |
-| `HAKAI` | Hakaishin |
-| `ANJO` | Anjo |
-| `G.K` | Grande Kaioshin |
-
-> Apenas **Autoridade Suprema**, **Supremo Ministro** ou admins do `.env` podem adicionar cargos supremos.
-
-> Hakaishin, Anjo e Grande Kaioshin podem adicionar cargos não supremos a jogadores do próprio universo.
-
-### Cargos Principais
-
-| Sigla | Cargo |
-|---|---|
-| `L.I` | Lutador Iniciante |
-| `KAMI` | Kami-sama |
-| `KAIOH` | Kaioh |
-| `G.KAIOH` | Grande Kaioh |
-| `KAIO` | Kaioshin |
-
-### Trabalhos / Cargos Secundários
-
-| Sigla | Cargo |
-|---|---|
-| `L.E` | Líder da Elaboração |
-| `ELAB` | Elaborador |
-| `J.O` | Juíz Oficial |
-| `RANK` | Rankeador |
-| `T.K` | Treinador (Kaioh) |
-| `L.J` | Líder do Jornal |
-| `JORNAL` | Jornalista |
-| `SITE` | Atualizador do site |
-
----
-
-## 💰 Salários
-
-O salário cai automaticamente a cada **2 dias** quando o bot estiver rodando. O bot também verifica pagamentos pendentes ao iniciar.
-
-> Se o jogador tiver um cargo principal e um trabalho secundário, o salário total é a **soma dos dois**.
-
----
-
-## 🏦 Depósito
-
-```
-/depositar 50000000
-```
-
-O valor sai dos Zenies disponíveis e entra no depósito. A cada **4 dias**, o depósito gera **25% de juros** que vão direto para o saldo de Zenies.
-
----
-
-## ⚡ Ki e Atributos
-
-Todo jogador começa com **Ki 01** e **100.000.000 Zenies**.
-
-Cada nível de Ki vale `+4.000.000` em atributos totais.
-
-| Ki | Atributos Totais |
-|---|---|
-| Ki 01 | 4.000.000 |
-| Ki 05 | 20.000.000 |
-| Ki 10 | 40.000.000 |
-
----
-
-## ⏳ Inatividade
-
-Se uma conta ficar **3 meses** sem usar comandos do bot, o personagem é apagado automaticamente e volta a ficar livre.
-
----
-
-## 🗄️ Banco de Dados
-
-O SQLite é criado automaticamente em `data/dragonverse.sqlite`.
-
-| Tabela | Descrição |
-|---|---|
-| `universes` | Universos cadastrados |
-| `characters` | Personagens disponíveis |
-| `players` | Jogadores registrados |
-| `character_claims` | Vínculos jogador ↔ personagem |
-| `rescue_codes` | Códigos de resgate |
-| `player_inventory` | Inventário de itens |
-| `purchase_history` | Histórico de compras |
-| `event_daily_stats` | Status diário de eventos |
-| `event_chats` | Chats com eventos ativos |
-| `event_chat_daily_stats` | Estatísticas diárias por chat |
-| `active_events` | Eventos em andamento |
-| `transfer_history` | Histórico de transferências PIX |
-
----
-
-## 🖼️ Fotos dos Personagens
-
-Coloque imagens PNG na pasta:
-
-```
-assets/personagens/
-```
-
-O nome deve ser o **slug** do personagem:
-
-```
-assets/personagens/goku.png
-assets/personagens/android-17.png
-assets/personagens/broly-dbs.png
-assets/personagens/dragao-de-uma-estrela.png
-```
-
-> Se a imagem não existir, o `/Perfil` envia apenas o texto e mostra o caminho esperado.
-
----
-
-## 🔄 Atualização v7 — Personagens, Troca e Tigrinho
-
-### Novidades do Universo 2
-
-- Baby, Bibidi, Hit e Vegeta como **bloqueados**
-- Broly (DBZ), Chaos e Mr. Popo **adicionados**
-- Android 18, Gohan, Goku Black, Goten, Janemba, Kale, Kid Buu, Majin Buu, Piccolo, Towa e Trunks do Futuro começam **livres**
-
-### Comandos de Personagem
-
-```
-/addpersonagem Nome do Personagem Block
-/addpersonagem Nome do Personagem Free
-/addpersonagem 3 Nome do Personagem Block
-/rmvpersonagem Nome do Personagem
-/rmvpersonagem 3 Nome do Personagem
-/Trocarpersonagem Nome do Personagem
-```
-
-> `/Trocarpersonagem` só permite trocar para personagem livre do mesmo universo. Custa **25% dos Zenies** atuais.
-
-### 🎰 Tigrinho
-
-```
-/tigrinho valorapostado
-```
-
-| Regra | Detalhe |
-|---|---|
-| Aposta mínima | 1.000.000 Zenies |
-| Apostas por dia | 3 vezes |
-| 3 🐉 | 2x a aposta |
-| 6 🐉 | 5x a aposta |
-| 9 🐉 | 10x a aposta |
-| 3 ou mais 💩 | Perde o dobro |
-| Sem combinação | Perde a aposta |
-
----
-
-## 🔄 Atualização v8 — Transferência e Tigrinho Novo
-
-### 💸 PIX DragonVerse
-
-```
-/pix @pessoa valor
-/extrato
-/extrato entrada
-/extrato saida
-/extrato perda
-```
-
-O bot desconta o valor de quem enviou, adiciona a quem recebeu e registra em `transfer_history`.
-
-### 🎰 Tigrinho com Novos Símbolos
-
-| Símbolo | 3 iguais | 6 iguais | 9 iguais |
-|---|:---:|:---:|:---:|
-| 🐉 Dragão | 2x | 5x | 10x |
-| 🐯 Tigre | 3x | 7x | 15x |
-| 🦍 Gorila | 4x | 8x | 20x |
-| 💎 Diamante | 5x | 10x | 25x |
-| ⭐ Estrela | 2x | 4x | 8x |
-| 🔥 Fogo | 2x | 4x | 8x |
-| 🍀 Trevo | 2x | 5x | 12x |
-| 🪙 Moeda | 2x | 3x | 6x |
-
-> Se mais de uma combinação sair, o bot paga a **melhor combinação**.
-
----
-
-## 🔄 Atualização v9 — Alta Cúpula
-
-Ao iniciar o bot, a migration sincroniza `character_claims.claim_type`:
-
-- Jogadores com cargo supremo (`A.S`, `S.M`, `HAKAI`, `ANJO`, `G.K`) passam para `claim_type = 'supremo'`
-- Personagens supremos continuam aparecendo no `/Perfil`
-- Esses personagens **deixam de aparecer** como ocupados em `/Personagens universo`
-- Não é necessário apagar `data/dragonverse.sqlite`
-
-> Quando alguém recebe um cargo supremo via `/addcargo`, a vaga comum do universo é liberada imediatamente.
-
----
-
-## 🔄 Atualização v10 — Menu, Pix e Jogos de Cartas
-
-### Comandos Renomeados
-
-| Antigo | Novo |
-|---|---|
-| `/help` | `/menu` |
-| `/transferir` | `/pix` |
-
-### 🃏 Blackjack
-
-```
+```txt
 /blackjack iniciar 1000000
 /blackjack carta
 /blackjack parar
 /blackjack dobrar
 ```
 
-| Resultado | Pagamento |
-|---|---|
-| Vitória | 2x |
-| Empate | Devolve a aposta |
-| Blackjack Natural | 2.5x |
+- Jogado contra a mesa.
+- Vitória paga 2x, empate devolve aposta, Blackjack natural paga 2.5x.
 
-### ♠️ Poker (Texas Hold'em)
+Também existe o modo **mesa de grupo**:
 
+```txt
+/blackjack criar 1000000
+/blackjack entrar
+/blackjack start
+/carta
+/parar
 ```
+
+### Poker (Texas Hold’em simplificado)
+
+```txt
 /poker criar 1000000
 /poker entrar
 /poker iniciar
@@ -508,11 +283,11 @@ Ao iniciar o bot, a migration sincroniza `character_claims.claim_type`:
 /poker cartas
 ```
 
-O bot envia as cartas no privado, abre as comunitárias com `/poker mesa` e calcula o vencedor no showdown.
+O bot envia cartas no privado, abre as comunitárias no grupo e calcula o vencedor.
 
-### 🎴 Truco Paulista
+### Truco paulista limpo
 
-```
+```txt
 /truco criar valor
 /truco entrar
 /truco iniciar
@@ -526,41 +301,223 @@ O bot envia as cartas no privado, abre as comunitárias com `/poker mesa` e calc
 /truco cartas
 ```
 
-Baralho limpo (sem 8, 9, 10 e coringas). O bot envia as cartas no privado, mostra a vira e a manilha no grupo.
+- Baralho limpo (sem 8, 9, 10 e coringas).
+- Há modo com aposta, inclusive 2x2 com sorteio de duplas.
+
+### Tigrinho / Cassino
+
+```txt
+/tigrinho valor
+```
+
+- Aposta mínima: `1.000.000` Zenies.
+- Até 3 apostas por dia por jogador.
+- Múltiplos símbolos (Dragão, Tigre, Gorila, Diamante, Estrela, Fogo, Trevo, Moeda) com multiplicadores diferentes.
+- 3 ou mais 💩 fazem perder o dobro; se houver mais de uma combinação, o bot paga a melhor.
 
 ---
 
-## 🔄 Atualização v16 — Regras, Mesas e Menções Clicáveis
+## 🏆 Ranked, torneios, raids e bounty
 
-### Regras dos Jogos
+### Ranked (1x1)
 
-```
-/regras poker
-/regras blackjack
-/regras truco
-```
-
-### Blackjack em Mesa de Grupo
-
-```
-/blackjack criar 1000000
-/blackjack entrar
-/blackjack start
-/carta
-/parar
+```txt
+/rankeada
+/listarank
+/irank
+/desafio @alguem
+/adesafio
+/rdesafio
+/rv @vencedor
+/removerrank @jogador
 ```
 
-Os jogadores entram, o bot marca quem está na vez, cada um pede carta até parar/estourar e no final a mesa joga e paga os vencedores.
+- O `rankedService` cuida da criação e resultado das partidas.
+- Ranking consultável via `/listarank` e `/irank`.
 
-### Truco com Apostas
+### Torneios
 
-Aceita **2 ou 4 jogadores**, sorteia duplas no 2v2, joga até um time chegar a **12 pontos**. Prêmio é o pote total:
-- **1v1** → vai inteiro para o vencedor
-- **2v2** → dividido entre a dupla vencedora
+```txt
+/gerartorneio 1000000
+/inscrever
+/torneio
+/vencedor @pessoa
+```
 
-### Menções Clicáveis
+- `tournamentService` organiza chaves, eliminações e prêmios.
 
-Comandos de jogos de cartas, PIX, economia admin, cargo e eventos agora retornam `mentions` com JID real do WhatsApp, evitando o aviso `Contact deprecated` e permitindo **menção azul clicável**.
+### Raids
+
+```txt
+/raid
+/raids
+```
+
+- `systems/raids.js` gera raids automaticamente via manutenção (`checkAndGenerateRaids`).
+- Jogadores podem entrar e enfrentar bosses cooperativamente.
+
+### Bounty (caça à cabeça)
+
+```txt
+/cacacabeca
+/caca cabeca
+/vitoria @pessoa
+```
+
+- `bountyService` registra alvos, progressos e recompensas.
+
+### DVI (Forbes dos ricos)
+
+```txt
+/dvi
+/forbes
+/ricos
+/topricos
+```
+
+- `systems/dvi.js` monta um ranking de riqueza dos jogadores.
+
+---
+
+## 👑 Cargos e permissões
+
+### Cargos supremos (Alta Cúpula)
+
+Estes cargos **não ocupam personagem comum** do universo; aparecem no perfil, mas a vaga do universo continua livre.
+
+| Sigla | Cargo |
+|---|---|
+| `A.S` | Autoridade Suprema |
+| `S.M` | Supremo Ministro |
+| `HAKAI` | Hakaishin |
+| `ANJO` | Anjo |
+| `G.K` | Grande Kaioshin |
+
+- Apenas A.S, S.M ou admins do `.env` podem dar/remover cargos supremos.
+- Ao receber cargo supremo, a claim comum é migrada para `claim_type = 'supremo'` e a vaga comum é liberada.
+
+### Cargos principais
+
+| Sigla | Cargo |
+|---|---|
+| `L.I` | Lutador Iniciante |
+| `KAMI` | Kami-sama |
+| `KAIOH` | Kaioh |
+| `G.KAIOH` | Grande Kaioh |
+| `KAIO` | Kaioshin |
+
+### Trabalhos / cargos secundários
+
+| Sigla | Cargo |
+|---|---|
+| `L.E` | Líder da Elaboração |
+| `ELAB` | Elaborador |
+| `J.O` | Juíz Oficial |
+| `RANK` | Rankeador |
+| `T.K` | Treinador (Kaioh) |
+| `L.J` | Líder do Jornal |
+| `JORNAL` | Jornalista |
+| `SITE` | Atualizador do site |
+
+Salário total = salário do cargo principal + salário do cargo secundário (se houver).
+
+---
+
+## 🏦 Depósito e juros
+
+```txt
+/depositar 50000000
+/saldo
+/poupanca
+/retirarpoupanca 10000000
+```
+
+- Depósito gera **25% de juros** a cada 4 dias, enquanto o bot estiver rodando.
+- O serviço de economia verifica pagamentos pendentes ao iniciar.
+
+---
+
+## ⚡ Ki, atributos e progressão
+
+- Todo jogador começa com **Ki 01** e **100.000.000** Zenies.
+- Cada nível de Ki vale `+4.000.000` em atributos totais.
+
+| Ki | Atributos totais |
+|---|---|
+| Ki 01 | 4.000.000 |
+| Ki 05 | 20.000.000 |
+| Ki 10 | 40.000.000 |
+
+Compra de Ki:
+
+```txt
+/comprar Ki
+```
+
+O comando compra sempre o **próximo Ki** do jogador, respeitando os preços configurados em `data/shop.js`.
+
+---
+
+## ⏳ Inatividade
+
+- Se uma conta ficar **3 meses** sem usar comandos, o personagem é apagado automaticamente e volta a ficar livre.
+- `inactivityService` roda periodicamente para limpar claims inativas.
+
+---
+
+## 🗄️ Banco de dados e seeds
+
+O SQLite é criado automaticamente em:
+
+```txt
+data/dragonverse.sqlite
+```
+
+Principais tabelas:
+
+- `universes`, `characters`, `players`, `character_claims`, `rescue_codes`
+- `player_inventory`, `purchase_history`
+- `event_daily_stats`, `event_chats`, `event_chat_daily_stats`, `active_events`
+- `transfer_history` (PIX, compras, perdas, ganhos)
+- Tabelas auxiliares de ranked, torneios, raids e gacha
+
+Seeds/scripts úteis:
+
+- `database/seedGacha.js` → popula pools de gacha.
+- `database/seedItems.js` → popula itens da loja.
+- `database/runGacha.js` → utilitário para testar o gacha via CLI.
+- `database/runMigrations.js` → executa migrations de schema.
+
+---
+
+## 🖼️ Fotos dos personagens
+
+Coloque imagens PNG na pasta:
+
+```txt
+assets/personagens/
+```
+
+Use o slug do personagem como nome do arquivo:
+
+```txt
+assets/personagens/goku.png
+assets/personagens/android-17.png
+assets/personagens/broly-dbs.png
+assets/personagens/dragao-de-uma-estrela.png
+```
+
+Se a imagem não existir, o comando `/Perfil` envia apenas o texto e mostra o caminho esperado.
+
+---
+
+## 🧩 Extras e utilidades
+
+- `/meuid` → mostra ID, JID, LID e se você é admin.
+- `/convite` → gerenciamento de convites e links.
+- `/anime`, `/animeep` → comandos temáticos de anime.
+- `/spotify`, `/spotify2` → busca e interação com Spotify.
+- Menções azuis clicáveis (JID real) em respostas de economia, jogos, PIX, cargos, eventos.
 
 ---
 
