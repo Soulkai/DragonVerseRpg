@@ -5,6 +5,41 @@ const { getFirstMentionedId } = require('../utils/mentions');
 const { isAdmin } = require('../utils/admin');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+const { spawn } = require('child_process');
+
+// Usa o binário exato do ffmpeg-static, sem passar por fluent-ffmpeg
+const ffmpegBin = require('ffmpeg-static');
+
+function gifToMp4(gifPath) {
+    return new Promise((resolve, reject) => {
+        const output = path.join(os.tmpdir(), `gif_${Date.now()}.mp4`);
+
+        const args = [
+            '-y',                          // sobrescreve se existir
+            '-i', gifPath,                 // input
+            '-movflags', 'faststart',
+            '-pix_fmt', 'yuv420p',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            '-an',                         // sem áudio
+            output
+        ];
+
+        const proc = spawn(ffmpegBin, args);
+
+        proc.on('close', (code) => {
+            if (code === 0) {
+                resolve(output);
+            } else {
+                reject(new Error(`ffmpeg encerrou com código ${code}`));
+            }
+        });
+
+        proc.on('error', (err) => {
+            reject(new Error('Falha ao iniciar ffmpeg: ' + err.message));
+        });
+    });
+}
 
 async function perfilCommand(message, command = {}) {
     let targetWhatsappId = null;
@@ -45,31 +80,40 @@ async function perfilCommand(message, command = {}) {
         const isGif = ext === '.gif';
         const isVideo = ext === '.mp4';
 
-        // Monta o MessageMedia manualmente via base64 para evitar o erro t:t do puppeteer
-        const mimeTypes = {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
+        let sendPath = finalPath;
+        let tempFile = null;
+
+        if (isGif) {
+            sendPath = await gifToMp4(finalPath);
+            tempFile = sendPath;
+        }
+
+        const mimeMap = {
+            '.png':  'image/png',
+            '.jpg':  'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.webp': 'image/webp',
-            '.gif': 'video/mp4',   // GIF enviado como vídeo curto
-            '.mp4': 'video/mp4',
+            '.mp4':  'video/mp4',
         };
 
-        const mime = mimeTypes[ext] || 'application/octet-stream';
-        const fileBuffer = fs.readFileSync(finalPath);
-        const base64 = fileBuffer.toString('base64');
-        const media = new MessageMedia(mime, base64, path.basename(finalPath));
-
+        const mime = (isGif || isVideo) ? 'video/mp4' : (mimeMap[ext] || 'image/png');
+        const base64 = fs.readFileSync(sendPath).toString('base64');
+        const media = new MessageMedia(mime, base64, path.basename(sendPath));
         const chat = await message.getChat();
 
         if (isGif || isVideo) {
             await chat.sendMessage(media, {
                 caption,
-                sendVideoAsGif: isGif,
+                sendVideoAsGif: true,
             });
         } else {
             await message.reply(media, undefined, { caption });
         }
+
+        if (tempFile && fs.existsSync(tempFile)) {
+            fs.unlinkSync(tempFile);
+        }
+
         return;
     }
 
