@@ -26,16 +26,13 @@ async function perfilCommand(message, command = {}) {
     }
 
     const caption = profileCaption(result.profile);
-    
-    // Lista de extensões suportadas para busca
+
     const extensions = ['.png', '.jpg', '.jpeg', '.gif', '.mp4', '.webp'];
     let finalPath = null;
 
-    // Remove a extensão .png padrão do service para testar todas as possibilidades
     const basePath = result.profile.image_path.replace(/\.png$/i, '');
     const absoluteBasePath = path.resolve(process.cwd(), basePath);
 
-    // Varre as extensões para encontrar o arquivo existente
     for (const ext of extensions) {
         const candidate = absoluteBasePath + ext;
         if (fs.existsSync(candidate)) {
@@ -46,14 +43,19 @@ async function perfilCommand(message, command = {}) {
 
     if (finalPath) {
         const media = MessageMedia.fromFilePath(finalPath);
-        
-        // Se for MP4 ou GIF, enviamos com suporte a vídeo/animação
-        const isVideo = finalPath.endsWith('.mp4') || finalPath.endsWith('.gif');
-        
-        await message.reply(media, undefined, { 
-            caption,
-            sendVideoAsGif: finalPath.endsWith('.gif') 
-        });
+        const isAnimated = finalPath.endsWith('.gif') || finalPath.endsWith('.mp4');
+
+        if (isAnimated) {
+            // client.sendMessage é obrigatório para GIF/MP4 com sendVideoAsGif
+            // message.reply não aceita esse parâmetro e lança erro no puppeteer
+            const chat = await message.getChat();
+            await chat.sendMessage(media, {
+                caption,
+                sendVideoAsGif: finalPath.endsWith('.gif'),
+            });
+        } else {
+            await message.reply(media, undefined, { caption });
+        }
         return;
     }
 
