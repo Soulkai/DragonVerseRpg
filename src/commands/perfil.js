@@ -47,7 +47,7 @@ async function perfilCommand(message, command = {}) {
 
         if (isAnimated) {
             // client.sendMessage é obrigatório para GIF/MP4 com sendVideoAsGif
-            // message.reply não aceita esse parâmetro e lança erro no puppeteer
+            // message.reply não aceita esse parâmetro e lança erro no puppetee
             const chat = await message.getChat();
             await chat.sendMessage(media, {
                 caption,
