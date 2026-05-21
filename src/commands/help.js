@@ -78,6 +78,8 @@ async function helpCommand(message) {
         `▢`,
         `▢ • *${p}mercado comprar ID*`,
         `▢ ⤷ Compra um guerreiro listado no Mercado Negro.`,
+        `▢ • *${p}box slug nome-do-slug*`,
+        `▢ ⤷ Mostra a ficha completa de um guerreiro da coleção/catálogo.`,
         `▢`,
         `╰━━─「🎒」─━━`,
         ``,
