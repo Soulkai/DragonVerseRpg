@@ -41,15 +41,35 @@ async function perfilCommand(message, command = {}) {
     }
 
     if (finalPath) {
-        const media = MessageMedia.fromFilePath(finalPath);
-        const chat = await message.getChat();
-        const isGif = finalPath.endsWith('.gif');
-        const isVideo = finalPath.endsWith('.mp4');
+        const ext = path.extname(finalPath).toLowerCase();
+        const isGif = ext === '.gif';
+        const isVideo = ext === '.mp4';
 
-        await chat.sendMessage(media, {
-            caption,
-            sendVideoAsGif: isGif,
-        });
+        // Monta o MessageMedia manualmente via base64 para evitar o erro t:t do puppeteer
+        const mimeTypes = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.webp': 'image/webp',
+            '.gif': 'video/mp4',   // GIF enviado como vídeo curto
+            '.mp4': 'video/mp4',
+        };
+
+        const mime = mimeTypes[ext] || 'application/octet-stream';
+        const fileBuffer = fs.readFileSync(finalPath);
+        const base64 = fileBuffer.toString('base64');
+        const media = new MessageMedia(mime, base64, path.basename(finalPath));
+
+        const chat = await message.getChat();
+
+        if (isGif || isVideo) {
+            await chat.sendMessage(media, {
+                caption,
+                sendVideoAsGif: isGif,
+            });
+        } else {
+            await message.reply(media, undefined, { caption });
+        }
         return;
     }
 
