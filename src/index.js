@@ -73,13 +73,14 @@ migrate();
 // ==========================================
 const client = new Client({
     authStrategy: new LocalAuth({ clientId: 'dragonverse-rpg', dataPath: './.wwebjs_auth' }),
-    authTimeoutMs: 90000, // ⏳ Tolerância maior para conexões instáveis
+    authTimeoutMs: 90000,
     puppeteer: { 
+        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
         headless: true, 
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage', // Previne estouro de memória no background
+            '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
             '--disable-gpu'
         ] 
@@ -123,8 +124,6 @@ client.on('message', async (message) => {
     try {
         const groupId = message.from;
         
-        // >> LÓGICA DE SPAWN (50 mensagens) - UNIFICADA <<
-        // Consultamos a tabela event_chats (a mesma do seu runAutoEvents)
         const eventConfig = db.prepare('SELECT is_enabled FROM event_chats WHERE chat_id = ?').get(groupId);
 
         if (eventConfig && eventConfig.is_enabled) {
@@ -143,14 +142,12 @@ client.on('message', async (message) => {
         touchPlayerActivity(message);
 
         switch (command.name) {
-            // >> NOVOS COMANDOS <<
             case 'capturar': case 'capture': await capturarCommand(message, command); break;
             case 'raid': case 'raids': await raidCommand(message, command); break;
             case 'box': case 'boxe': case 'colecao': case 'coleção': await boxCommand(message, command); break;
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
             case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break;
             
-            // 📺 COMANDOS DE ANIME INTEGRADOS
             case 'anime':
             case 'anime2': 
                 await animeCommand(message, command); 
@@ -160,7 +157,6 @@ client.on('message', async (message) => {
                 await animeEpCommand(message, command); 
                 break;
             
-            // ... (restante dos cases)
             case 'registro': await registroCommand(message, command); break;
             case 'personagens': await personagensCommand(message, command); break;
             case 'players': case 'jogadores': await playersListCommand(message, command, client); break;
