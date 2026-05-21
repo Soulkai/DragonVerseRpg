@@ -26,7 +26,6 @@ async function perfilCommand(message, command = {}) {
     }
 
     const caption = profileCaption(result.profile);
-
     const extensions = ['.png', '.jpg', '.jpeg', '.gif', '.mp4', '.webp'];
     let finalPath = null;
 
@@ -43,19 +42,14 @@ async function perfilCommand(message, command = {}) {
 
     if (finalPath) {
         const media = MessageMedia.fromFilePath(finalPath);
-        const isAnimated = finalPath.endsWith('.gif') || finalPath.endsWith('.mp4');
+        const chat = await message.getChat();
+        const isGif = finalPath.endsWith('.gif');
+        const isVideo = finalPath.endsWith('.mp4');
 
-        if (isAnimated) {
-            // client.sendMessage é obrigatório para GIF/MP4 com sendVideoAsGif
-            // message.reply não aceita esse parâmetro e lança erro no puppetee
-            const chat = await message.getChat();
-            await chat.sendMessage(media, {
-                caption,
-                sendVideoAsGif: finalPath.endsWith('.gif'),
-            });
-        } else {
-            await message.reply(media, undefined, { caption });
-        }
+        await chat.sendMessage(media, {
+            caption,
+            sendVideoAsGif: isGif,
+        });
         return;
     }
 
