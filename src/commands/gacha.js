@@ -73,10 +73,10 @@ async function cmdGacha(client, message) {
     const player = getPlayer(message, { createIfMissing: true, touch: true });
     if (!player) return sendText(client, message, '❌ Não foi possível localizar seu cadastro agora.');
 
+
     const lines = [
         `🎰 *SISTEMA DE GACHA — DragonVerse RPG*`,
         ``,
-        `👤 Jogador: *${player.display_name || player.phone || 'Sem nome'}*`,
         `💰 Seu saldo: *${formatZenies(player.zenies)} Zenies*`,
         ``,
         `📊 *Giros restantes hoje:*`
@@ -91,13 +91,13 @@ async function cmdGacha(client, message) {
 
     lines.push(``);
     lines.push(`📌 *Comandos:*`);
-    lines.push(`  */banner* — ver os 3 banners do dia`);
-    lines.push(`  */girar comum | premium | divino* — 1 giro`);
-    lines.push(`  */girar10 comum | premium | divino* — 10x com 10% desconto`);
-    lines.push(`  */up <slug>* — upar nível de um slug`);
-    lines.push(`  */pullhistory* — últimos 20 giros`);
+    lines.push(`  *.banner* — ver os 3 banners do dia`);
+    lines.push(`  *.girar comum | premium | divino* — 1 giro`);
+    lines.push(`  *.girar10 comum | premium | divino* — 10x com 10% desconto`);
+    lines.push(`  *.up <slug>* — upar nível de um slug`);
+    lines.push(`  *.pullhistory* — últimos 20 giros`);
 
-    await sendText(client, message, lines.join('\\n'));
+    await sendText(client, message, lines.join('\n'));
 }
 
 async function cmdBanner(client, message) {
@@ -124,15 +124,15 @@ async function cmdBanner(client, message) {
         lines.push('');
     }
 
-    await sendText(client, message, lines.join('\\n'));
+    await sendText(client, message, lines.join('\n'));
 }
 
-async function cmdGirar(client, message, bannerType) {
+async function cmdGirar(client, message, sender, bannerType) {
     if (!BANNER_CONFIG[bannerType]) {
         return sendText(client, message, '❌ Banner inválido. Use: *comum*, *premium* ou *divino*.');
     }
 
-    const player = getPlayer(message);
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     await sendReaction(message, '🎰');
@@ -145,6 +145,7 @@ async function cmdGirar(client, message, bannerType) {
     await delay(800);
 
     const result = executePull(player.id, bannerType);
+
     if (!result.success) {
         return sendText(client, message, formatError(result, bannerType));
     }
@@ -156,25 +157,27 @@ async function cmdGirar(client, message, bannerType) {
         `🐉 *${result.reward.reward_name}*`,
         `📊 Rank: *${result.reward.rarity}*`,
         `📦 Tipo: ${result.reward.reward_type === 'character' ? 'Personagem' : 'Item'}`,
+        result.isPity ? `` : null,
         result.isPity ? `🌟 *PITY ATIVADO!* Você chegou aos ${PITY_LIMIT} giros!` : null,
         result.isDuplicate
-            ? `⚠️ *Duplicata detectada!* Responda com:\\n*1* — Guardar como duplicata (bônus de Raid)\\n*2* — Converter em item de UP\\n_(você tem 60 segundos)_`
+            ? `⚠️ *Duplicata detectada!* Responda com:\n*1* — Guardar como duplicata (bônus de Raid)\n*2* — Converter em item de UP\n_(você tem 60 segundos)_`
             : `✅ *Adicionado à sua Box!*`,
         ``,
         `💰 Custo: ${formatZenies(result.cost)} Zenies`
     ].filter(Boolean);
 
     await sendReaction(message, emoji);
-    await sendText(client, message, lines.join('\\n'));
+    await sendText(client, message, lines.join('\n'));
+
     await checkGlobalAnnounce(client, message, player, result);
 }
 
-async function cmdGirar10(client, message, bannerType) {
+async function cmdGirar10(client, message, sender, bannerType) {
     if (!BANNER_CONFIG[bannerType]) {
         return sendText(client, message, '❌ Banner inválido. Use: *comum*, *premium* ou *divino*.');
     }
 
-    const player = getPlayer(message);
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     await sendText(client, message, `🎰 *Preparando 10 giros no ${BANNER_LABEL[bannerType]}...*`);
@@ -183,6 +186,7 @@ async function cmdGirar10(client, message, bannerType) {
     await delay(1000);
 
     const result = executeTenPulls(player.id, bannerType);
+
     if (!result.success) {
         return sendText(client, message, formatError(result, bannerType));
     }
@@ -200,6 +204,7 @@ async function cmdGirar10(client, message, bannerType) {
     const dupes = successResults.filter(r => r.isDuplicate);
     const items = successResults.filter(r => r.reward.reward_type === 'item');
     const pityHit = successResults.filter(r => r.isPity);
+
     const totalPaid = result.results.reduce((a, r) => a + (r.cost || 0), 0) - (result.discountApplied || 0);
 
     const lines = [
@@ -222,23 +227,22 @@ async function cmdGirar10(client, message, bannerType) {
         `💰 Total pago: *${formatZenies(totalPaid)} Zenies* (10% off aplicado)`
     ].filter(Boolean);
 
-    await sendText(client, message, lines.join('\\n'));
+    await sendText(client, message, lines.join('\n'));
 
     for (const r of successResults) {
         await checkGlobalAnnounce(client, message, player, r);
     }
 
     if (dupes.length > 0) {
-        await sendText(client, message, `⚠️ Você tem *${dupes.length} duplicata(s)* pendente(s)!\\nResponda com *1* (duplicata) ou *2* (item de UP) para cada uma.\\n_(apenas a mais recente ficará aguardando)_`);
+        await sendText(client, message, `⚠️ Você tem *${dupes.length} duplicata(s)* pendente(s)!\nResponda com *1* (duplicata) ou *2* (item de UP) para cada uma.\n_(apenas a mais recente ficará aguardando)_`);
     }
 }
 
-async function cmdDuplicateChoice(client, message, choice) {
-    const player = getPlayer(message);
+async function cmdDuplicateChoice(client, message, sender, choice) {
+    const player = getPlayer(sender);
     if (!player) return;
 
-    const normalizedChoice = String(choice || '').replace(/^\\./, '').trim();
-    const result = resolveDuplicateChoice(player.id, normalizedChoice);
+    const result = resolveDuplicateChoice(player.id, choice);
 
     if (!result.success) {
         if (result.reason === 'no_pending') return;
@@ -254,21 +258,22 @@ async function cmdDuplicateChoice(client, message, choice) {
     }
 }
 
-async function cmdUp(client, message, slugArg) {
+async function cmdUp(client, message, sender, slugArg) {
     if (!slugArg) {
         return sendText(client, message, '❌ Use: */up <nome ou slug do personagem>*');
     }
 
-    const player = getPlayer(message);
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     const result = upSlugLevel(player.id, slugArg);
+
     if (!result.success) {
         const msgs = {
             not_found: `❌ Personagem "${slugArg}" não encontrado.`,
             not_owned: `❌ Você não possui esse personagem na Box.`,
             max_level: `⚠️ Seu personagem já está no *nível máximo (50)*!`,
-            no_item: `❌ Você não tem o item necessário para upar este rank.\\nVerifique seu inventário com */inventario*`,
+            no_item: `❌ Você não tem o item necessário para upar este rank.\nVerifique seu inventário com */inventario*`,
             no_money: `❌ Zenies insuficientes! Você precisa de *${formatZenies(result.custo)}* e faltam *${formatZenies(result.falta)}* Zenies.`,
             item_not_found: `❌ Item de UP para esse rank não foi encontrado no sistema.`
         };
@@ -283,11 +288,11 @@ async function cmdUp(client, message, slugArg) {
         `📈 Nível: *${result.oldLevel}* → *${result.newLevel}*`,
         `💰 Custo: *${formatZenies(result.cost)} Zenies*`,
         result.newLevel === 50 ? `🏆 *NÍVEL MÁXIMO ATINGIDO!*` : null
-    ].filter(Boolean).join('\\n'));
+    ].filter(Boolean).join('\n'));
 }
 
-async function cmdPullHistory(client, message) {
-    const player = getPlayer(message);
+async function cmdPullHistory(client, message, sender) {
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     const history = getPullHistory(player.id, 20);
@@ -304,7 +309,7 @@ async function cmdPullHistory(client, message) {
         lines.push(`${e} *${pull.reward_name}* [${pull.rarity}] — ${pull.banner_type} — ${date}${dupe}${pity}`);
     }
 
-    await sendText(client, message, lines.join('\\n'));
+    await sendText(client, message, lines.join('\n'));
 }
 
 function delay(ms) {
@@ -319,10 +324,10 @@ function rarityOrder(rarity) {
 function formatError(result, bannerType) {
     const cfg = BANNER_CONFIG[bannerType];
     if (result.reason === 'limit_reached') {
-        return `⛔ Você já usou todos os *${cfg.maxPullsPerDay} giros* do ${BANNER_LABEL[bannerType]} hoje!\\nVolte amanhã às *00:00*.`;
+        return `⛔ Você já usou todos os *${cfg.maxPullsPerDay} giros* do ${BANNER_LABEL[bannerType]} hoje!\nVolte amanhã às *00:00*.`;
     }
     if (result.reason === 'no_money') {
-        return `❌ Zenies insuficientes!\\n💸 Custo: *${formatZenies(result.custo)}*\\n📉 Faltam: *${formatZenies(result.falta)} Zenies*`;
+        return `❌ Zenies insuficientes!\n💸 Custo: *${formatZenies(result.custo)}*\n📉 Faltam: *${formatZenies(result.falta)} Zenies*`;
     }
     if (result.reason === 'not_enough_pulls') {
         return `⛔ Você só tem *${result.remaining} giro(s)* restantes hoje neste banner. Não é suficiente para o 10x.`;
@@ -339,17 +344,17 @@ async function checkGlobalAnnounce(client, message, player, result) {
     if (!highRarities.includes(result.reward.rarity)) return;
 
     const emoji = RARITY_EMOJI[result.reward.rarity] || '✨';
-    const playerName = player.display_name || player.phone || 'Jogador';
     const announce = [
         `🌍 *ANÚNCIO GLOBAL* 🌍`,
         ``,
-        `${emoji} *${playerName}* acabou de conseguir *${result.reward.reward_name}* [${result.reward.rarity}]!`,
+        `${emoji} *${player.name}* acabou de conseguir *${result.reward.reward_name}* [${result.reward.rarity}]!`,
         result.reward.rarity === 'Secret' ? `🔮 *UM SECRET FOI OBTIDO!* A história foi escrita.` : null,
         result.isPity ? `🌟 *Via PITY GARANTIDO!*` : null
-    ].filter(Boolean).join('\\n');
+    ].filter(Boolean).join('\n');
 
     await sendText(client, message, announce);
 }
+
 
 async function handleGachaCommands(client, message, command) {
 const lower = String(message?.body || '').trim().toLowerCase();
