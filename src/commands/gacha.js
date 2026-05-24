@@ -357,33 +357,33 @@ async function checkGlobalAnnounce(client, message, player, result) {
 }
 
 async function handleGachaCommands(client, message, command) {
-    const lower = String(message?.body || '').trim().toLowerCase();
-    const sender = message?.author || message?.from || '';
+const lower = String(message?.body || '').trim().toLowerCase();
+const sender = message?.author || message?.from || '';
 
-    if (!lower) return;
+if (!lower) return;
 
-    if (lower === '.gacha') return cmdGacha(client, message, sender);
-    if (lower === '.banner' || lower === '.banners') return cmdBanner(client, message);
-    if (lower === '.pullhistory') return cmdPullHistory(client, message, sender);
+if (lower === '.gacha') return cmdGacha(client, message, sender);
+if (lower === '.banner' || lower === '.banners') return cmdBanner(client, message);
+if (lower === '.pullhistory') return cmdPullHistory(client, message, sender);
 
-    if (lower.startsWith('.girar10 ')) {
-        const banner = lower.replace('.girar10 ', '').trim();
-        return cmdGirar10(client, message, sender, banner);
-    }
+if (lower.startsWith('.girar10 ')) {
+const banner = lower.replace('.girar10 ', '').trim();
+return cmdGirar10(client, message, sender, banner);
+}
 
-    if (lower.startsWith('.girar ')) {
-        const banner = lower.replace('.girar ', '').trim();
-        return cmdGirar(client, message, sender, banner);
-    }
+if (lower.startsWith('.girar ')) {
+const banner = lower.replace('.girar ', '').trim();
+return cmdGirar(client, message, sender, banner);
+}
 
-    if (lower.startsWith('.up ')) {
-        const slug = String(message.body || '').trim().slice(4).trim();
-        return cmdUp(client, message, sender, slug);
-    }
+if (lower.startsWith('.up ')) {
+const slug = String(message.body || '').trim().slice(4).trim();
+return cmdUp(client, message, sender, slug);
+}
 
-    if (lower === '.1' || lower === '.2') {
-        return cmdDuplicateChoice(client, message, sender, lower);
-    }
+if (lower === '.1' || lower === '.2') {
+return cmdDuplicateChoice(client, message, sender, lower);
+}
 }
 
 module.exports = { handleGachaCommands };
