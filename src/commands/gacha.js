@@ -14,6 +14,12 @@ const {
 
 const db = require('../database/db');
 
+const {
+    getOrCreatePlayerFromMessage,
+    getWhatsAppIdFromMessage,
+    touchPlayerActivity
+} = require('../services/playerService');
+
 const PITY_LIMIT = 100;
 
 const RARITY_EMOJI = {
@@ -35,12 +41,21 @@ const BANNER_LABEL = {
     divino: '✨ Banner Divino'
 };
 
-function getPlayer(sender) {
-    return db.prepare('SELECT * FROM players WHERE phone = ?').get(sender);
+function getPlayer(message, { createIfMissing = false, touch = true } = {}) {
+    if (!message) return null;
+
+    try {
+        const player = getOrCreatePlayerFromMessage(message, { touch });
+        if (!createIfMissing && !player) return null;
+        return player;
+    } catch (error) {
+        console.error('[gacha] Erro ao obter jogador:', error.message);
+        return null;
+    }
 }
 
 function getChatId(message) {
-    return message?.from;
+    return message?.from || null;
 }
 
 async function sendText(client, message, text) {
@@ -55,10 +70,10 @@ async function sendReaction(message, emoji) {
     } catch (_) {}
 }
 
-async function cmdGacha(client, message, sender) {
+async function cmdGacha(client, message) {
     ensureDailyBanners();
-    const player = getPlayer(sender);
-    if (!player) return sendText(client, message, '❌ Você não está registrado! Use */registro* para começar.');
+    const player = getPlayer(message, { createIfMissing: true, touch: true });
+    if (!player) return sendText(client, message, '❌ Não foi possível localizar seu cadastro agora.');
 
     const lines = [
         `🎰 *SISTEMA DE GACHA — DragonVerse RPG*`,
@@ -77,11 +92,11 @@ async function cmdGacha(client, message, sender) {
 
     lines.push(``);
     lines.push(`📌 *Comandos:*`);
-    lines.push(`  */banner* — ver os 3 banners do dia`);
-    lines.push(`  */girar comum | premium | divino* — 1 giro`);
-    lines.push(`  */girar10 comum | premium | divino* — 10x com 10% desconto`);
-    lines.push(`  */up <slug>* — upar nível de um slug`);
-    lines.push(`  */pullhistory* — últimos 20 giros`);
+    lines.push(`  *.banner* — ver os 3 banners do dia`);
+    lines.push(`  *.girar comum | premium | divino* — 1 giro`);
+    lines.push(`  *.girar10 comum | premium | divino* — 10x com 10% desconto`);
+    lines.push(`  *.up <slug>* — upar nível de um slug`);
+    lines.push(`  *.pullhistory* — últimos 20 giros`);
 
     await sendText(client, message, lines.join('\n'));
 }
