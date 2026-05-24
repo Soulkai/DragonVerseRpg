@@ -12,8 +12,11 @@ const {
     ensureDailyBanners
 } = require('../services/gachaService');
 
-const db = require('../database/db');
-const { getOrCreatePlayerFromMessage, getPlayerByWhatsAppId } = require('../services/playerService');
+const {
+    getOrCreatePlayerFromMessage,
+    getWhatsAppIdFromMessage,
+    touchPlayerActivity
+} = require('../services/playerService');
 
 const PITY_LIMIT = 100;
 
@@ -36,28 +39,21 @@ const BANNER_LABEL = {
     divino: '✨ Banner Divino'
 };
 
-function getPlayer(message) {
-    const whatsappId = message?.author || message?.from || '';
-    if (!whatsappId) return null;
-
-    const byWhatsappId = getPlayerByWhatsAppId(whatsappId);
-    if (byWhatsappId) return byWhatsappId;
-
-    const normalizedPhone = String(whatsappId).split('@')[0].replace(/\D/g, '');
-    if (normalizedPhone) {
-        const byPhone = db.prepare('SELECT * FROM players WHERE phone = ?').get(normalizedPhone);
-        if (byPhone) return byPhone;
-    }
+function getPlayer(message, { createIfMissing = false, touch = true } = {}) {
+    if (!message) return null;
 
     try {
-        return getOrCreatePlayerFromMessage(message, { touch: true });
-    } catch (_) {
+        const player = getOrCreatePlayerFromMessage(message, { touch });
+        if (!createIfMissing && !player) return null;
+        return player;
+    } catch (error) {
+        console.error('[gacha] Erro ao obter jogador:', error.message);
         return null;
     }
 }
 
 function getChatId(message) {
-    return message?.from;
+    return message?.from || null;
 }
 
 async function sendText(client, message, text) {
@@ -74,8 +70,8 @@ async function sendReaction(message, emoji) {
 
 async function cmdGacha(client, message) {
     ensureDailyBanners();
-    const player = getPlayer(message);
-    if (!player) return sendText(client, message, '❌ Você não está registrado! Use */registro* para começar.');
+    const player = getPlayer(message, { createIfMissing: true, touch: true });
+    if (!player) return sendText(client, message, '❌ Não foi possível localizar seu cadastro agora.');
 
     const lines = [
         `🎰 *SISTEMA DE GACHA — DragonVerse RPG*`,
