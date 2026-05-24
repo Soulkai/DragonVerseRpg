@@ -13,7 +13,6 @@ const {
 } = require('../services/gachaService');
 
 const db = require('../database/db');
-const { getOrCreatePlayerFromMessage, getPlayerByWhatsAppId } = require('../services/playerService');
 
 const PITY_LIMIT = 100;
 
@@ -55,7 +54,6 @@ function getPlayer(message) {
         return null;
     }
 }
-
 function getChatId(message) {
     return message?.from;
 }
@@ -72,15 +70,14 @@ async function sendReaction(message, emoji) {
     } catch (_) {}
 }
 
-async function cmdGacha(client, message) {
+async function cmdGacha(client, message, sender) {
     ensureDailyBanners();
-    const player = getPlayer(message);
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado! Use */registro* para começar.');
 
     const lines = [
         `🎰 *SISTEMA DE GACHA — DragonVerse RPG*`,
         ``,
-        `👤 Jogador: *${player.display_name || player.phone || 'Sem nome'}*`,
         `💰 Seu saldo: *${formatZenies(player.zenies)} Zenies*`,
         ``,
         `📊 *Giros restantes hoje:*`
@@ -131,12 +128,12 @@ async function cmdBanner(client, message) {
     await sendText(client, message, lines.join('\\n'));
 }
 
-async function cmdGirar(client, message, bannerType) {
+async function cmdGirar(client, message, sender, bannerType) {
     if (!BANNER_CONFIG[bannerType]) {
         return sendText(client, message, '❌ Banner inválido. Use: *comum*, *premium* ou *divino*.');
     }
 
-    const player = getPlayer(message);
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     await sendReaction(message, '🎰');
@@ -149,6 +146,7 @@ async function cmdGirar(client, message, bannerType) {
     await delay(800);
 
     const result = executePull(player.id, bannerType);
+
     if (!result.success) {
         return sendText(client, message, formatError(result, bannerType));
     }
@@ -160,6 +158,7 @@ async function cmdGirar(client, message, bannerType) {
         `🐉 *${result.reward.reward_name}*`,
         `📊 Rank: *${result.reward.rarity}*`,
         `📦 Tipo: ${result.reward.reward_type === 'character' ? 'Personagem' : 'Item'}`,
+        result.isPity ? `` : null,
         result.isPity ? `🌟 *PITY ATIVADO!* Você chegou aos ${PITY_LIMIT} giros!` : null,
         result.isDuplicate
             ? `⚠️ *Duplicata detectada!* Responda com:\\n*1* — Guardar como duplicata (bônus de Raid)\\n*2* — Converter em item de UP\\n_(você tem 60 segundos)_`
@@ -170,15 +169,16 @@ async function cmdGirar(client, message, bannerType) {
 
     await sendReaction(message, emoji);
     await sendText(client, message, lines.join('\\n'));
+
     await checkGlobalAnnounce(client, message, player, result);
 }
 
-async function cmdGirar10(client, message, bannerType) {
+async function cmdGirar10(client, message, sender, bannerType) {
     if (!BANNER_CONFIG[bannerType]) {
         return sendText(client, message, '❌ Banner inválido. Use: *comum*, *premium* ou *divino*.');
     }
 
-    const player = getPlayer(message);
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     await sendText(client, message, `🎰 *Preparando 10 giros no ${BANNER_LABEL[bannerType]}...*`);
@@ -187,6 +187,7 @@ async function cmdGirar10(client, message, bannerType) {
     await delay(1000);
 
     const result = executeTenPulls(player.id, bannerType);
+
     if (!result.success) {
         return sendText(client, message, formatError(result, bannerType));
     }
@@ -204,6 +205,7 @@ async function cmdGirar10(client, message, bannerType) {
     const dupes = successResults.filter(r => r.isDuplicate);
     const items = successResults.filter(r => r.reward.reward_type === 'item');
     const pityHit = successResults.filter(r => r.isPity);
+
     const totalPaid = result.results.reduce((a, r) => a + (r.cost || 0), 0) - (result.discountApplied || 0);
 
     const lines = [
@@ -237,12 +239,11 @@ async function cmdGirar10(client, message, bannerType) {
     }
 }
 
-async function cmdDuplicateChoice(client, message, choice) {
-    const player = getPlayer(message);
+async function cmdDuplicateChoice(client, message, sender, choice) {
+    const player = getPlayer(sender);
     if (!player) return;
 
-    const normalizedChoice = String(choice || '').replace(/^\\./, '').trim();
-    const result = resolveDuplicateChoice(player.id, normalizedChoice);
+    const result = resolveDuplicateChoice(player.id, choice);
 
     if (!result.success) {
         if (result.reason === 'no_pending') return;
@@ -258,15 +259,16 @@ async function cmdDuplicateChoice(client, message, choice) {
     }
 }
 
-async function cmdUp(client, message, slugArg) {
+async function cmdUp(client, message, sender, slugArg) {
     if (!slugArg) {
         return sendText(client, message, '❌ Use: */up <nome ou slug do personagem>*');
     }
 
-    const player = getPlayer(message);
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     const result = upSlugLevel(player.id, slugArg);
+
     if (!result.success) {
         const msgs = {
             not_found: `❌ Personagem "${slugArg}" não encontrado.`,
@@ -290,8 +292,8 @@ async function cmdUp(client, message, slugArg) {
     ].filter(Boolean).join('\\n'));
 }
 
-async function cmdPullHistory(client, message) {
-    const player = getPlayer(message);
+async function cmdPullHistory(client, message, sender) {
+    const player = getPlayer(sender);
     if (!player) return sendText(client, message, '❌ Você não está registrado!');
 
     const history = getPullHistory(player.id, 20);
@@ -343,11 +345,10 @@ async function checkGlobalAnnounce(client, message, player, result) {
     if (!highRarities.includes(result.reward.rarity)) return;
 
     const emoji = RARITY_EMOJI[result.reward.rarity] || '✨';
-    const playerName = player.display_name || player.phone || 'Jogador';
     const announce = [
         `🌍 *ANÚNCIO GLOBAL* 🌍`,
         ``,
-        `${emoji} *${playerName}* acabou de conseguir *${result.reward.reward_name}* [${result.reward.rarity}]!`,
+        `${emoji} *${player.name}* acabou de conseguir *${result.reward.reward_name}* [${result.reward.rarity}]!`,
         result.reward.rarity === 'Secret' ? `🔮 *UM SECRET FOI OBTIDO!* A história foi escrita.` : null,
         result.isPity ? `🌟 *Via PITY GARANTIDO!*` : null
     ].filter(Boolean).join('\\n');
@@ -357,29 +358,31 @@ async function checkGlobalAnnounce(client, message, player, result) {
 
 async function handleGachaCommands(client, message, command) {
     const lower = String(message?.body || '').trim().toLowerCase();
+    const sender = message?.author || message?.from || '';
+
     if (!lower) return;
 
-    if (lower === '.gacha' || lower === '/gacha') return cmdGacha(client, message);
-    if (lower === '.banner' || lower === '.banners' || lower === '/banner' || lower === '/banners') return cmdBanner(client, message);
-    if (lower === '.pullhistory' || lower === '/pullhistory') return cmdPullHistory(client, message);
+    if (lower === '.gacha') return cmdGacha(client, message, sender);
+    if (lower === '.banner' || lower === '.banners') return cmdBanner(client, message);
+    if (lower === '.pullhistory') return cmdPullHistory(client, message, sender);
 
-    if (lower.startsWith('.girar10 ') || lower.startsWith('/girar10 ')) {
-        const banner = lower.replace(/^\\.?\\/?girar10\\s+/, '').trim();
-        return cmdGirar10(client, message, banner);
+    if (lower.startsWith('.girar10 ')) {
+        const banner = lower.replace('.girar10 ', '').trim();
+        return cmdGirar10(client, message, sender, banner);
     }
 
-    if (lower.startsWith('.girar ') || lower.startsWith('/girar ')) {
-        const banner = lower.replace(/^\\.?\\/?girar\\s+/, '').trim();
-        return cmdGirar(client, message, banner);
+    if (lower.startsWith('.girar ')) {
+        const banner = lower.replace('.girar ', '').trim();
+        return cmdGirar(client, message, sender, banner);
     }
 
-    if (lower.startsWith('.up ') || lower.startsWith('/up ')) {
-        const slug = String(message.body || '').replace(/^\\.?\\/?up\\s+/, '').trim();
-        return cmdUp(client, message, slug);
+    if (lower.startsWith('.up ')) {
+        const slug = String(message.body || '').trim().slice(4).trim();
+        return cmdUp(client, message, sender, slug);
     }
 
-    if (lower === '1' || lower === '2' || lower === '.1' || lower === '.2' || lower === '/1' || lower === '/2') {
-        return cmdDuplicateChoice(client, message, lower);
+    if (lower === '.1' || lower === '.2') {
+        return cmdDuplicateChoice(client, message, sender, lower);
     }
 }
 
