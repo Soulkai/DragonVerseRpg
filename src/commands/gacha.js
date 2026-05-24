@@ -12,11 +12,7 @@ const {
     ensureDailyBanners
 } = require('../services/gachaService');
 
-const {
-    getOrCreatePlayerFromMessage,
-    getWhatsAppIdFromMessage,
-    touchPlayerActivity
-} = require('../services/playerService');
+const db = require('../database/db');
 
 const PITY_LIMIT = 100;
 
@@ -39,21 +35,12 @@ const BANNER_LABEL = {
     divino: '✨ Banner Divino'
 };
 
-function getPlayer(message, { createIfMissing = false, touch = true } = {}) {
-    if (!message) return null;
-
-    try {
-        const player = getOrCreatePlayerFromMessage(message, { touch });
-        if (!createIfMissing && !player) return null;
-        return player;
-    } catch (error) {
-        console.error('[gacha] Erro ao obter jogador:', error.message);
-        return null;
-    }
+function getPlayer(sender) {
+    return db.prepare('SELECT * FROM players WHERE phone = ?').get(sender);
 }
 
 function getChatId(message) {
-    return message?.from || null;
+    return message?.from;
 }
 
 async function sendText(client, message, text) {
@@ -68,11 +55,10 @@ async function sendReaction(message, emoji) {
     } catch (_) {}
 }
 
-async function cmdGacha(client, message) {
+async function cmdGacha(client, message, sender) {
     ensureDailyBanners();
-    const player = getPlayer(message, { createIfMissing: true, touch: true });
-    if (!player) return sendText(client, message, '❌ Não foi possível localizar seu cadastro agora.');
-
+    const player = getPlayer(sender);
+    if (!player) return sendText(client, message, '❌ Você não está registrado! Use */registro* para começar.');
 
     const lines = [
         `🎰 *SISTEMA DE GACHA — DragonVerse RPG*`,
@@ -91,11 +77,11 @@ async function cmdGacha(client, message) {
 
     lines.push(``);
     lines.push(`📌 *Comandos:*`);
-    lines.push(`  *.banner* — ver os 3 banners do dia`);
-    lines.push(`  *.girar comum | premium | divino* — 1 giro`);
-    lines.push(`  *.girar10 comum | premium | divino* — 10x com 10% desconto`);
-    lines.push(`  *.up <slug>* — upar nível de um slug`);
-    lines.push(`  *.pullhistory* — últimos 20 giros`);
+    lines.push(`  */banner* — ver os 3 banners do dia`);
+    lines.push(`  */girar comum | premium | divino* — 1 giro`);
+    lines.push(`  */girar10 comum | premium | divino* — 10x com 10% desconto`);
+    lines.push(`  */up <slug>* — upar nível de um slug`);
+    lines.push(`  */pullhistory* — últimos 20 giros`);
 
     await sendText(client, message, lines.join('\n'));
 }
@@ -355,35 +341,34 @@ async function checkGlobalAnnounce(client, message, player, result) {
     await sendText(client, message, announce);
 }
 
-
 async function handleGachaCommands(client, message, command) {
-const lower = String(message?.body || '').trim().toLowerCase();
-const sender = message?.author || message?.from || '';
+    const lower = String(message?.body || '').trim().toLowerCase();
+    const sender = message?.author || message?.from || '';
 
-if (!lower) return;
+    if (!lower) return;
 
-if (lower === '.gacha') return cmdGacha(client, message, sender);
-if (lower === '.banner' || lower === '.banners') return cmdBanner(client, message);
-if (lower === '.pullhistory') return cmdPullHistory(client, message, sender);
+    if (lower === '.gacha') return cmdGacha(client, message, sender);
+    if (lower === '.banner' || lower === '.banners') return cmdBanner(client, message);
+    if (lower === '.pullhistory') return cmdPullHistory(client, message, sender);
 
-if (lower.startsWith('.girar10 ')) {
-const banner = lower.replace('.girar10 ', '').trim();
-return cmdGirar10(client, message, sender, banner);
-}
+    if (lower.startsWith('.girar10 ')) {
+        const banner = lower.replace('.girar10 ', '').trim();
+        return cmdGirar10(client, message, sender, banner);
+    }
 
-if (lower.startsWith('.girar ')) {
-const banner = lower.replace('.girar ', '').trim();
-return cmdGirar(client, message, sender, banner);
-}
+    if (lower.startsWith('.girar ')) {
+        const banner = lower.replace('.girar ', '').trim();
+        return cmdGirar(client, message, sender, banner);
+    }
 
-if (lower.startsWith('.up ')) {
-const slug = String(message.body || '').trim().slice(4).trim();
-return cmdUp(client, message, sender, slug);
-}
+    if (lower.startsWith('.up ')) {
+        const slug = String(message.body || '').trim().slice(4).trim();
+        return cmdUp(client, message, sender, slug);
+    }
 
-if (lower === '.1' || lower === '.2') {
-return cmdDuplicateChoice(client, message, sender, lower);
-}
+    if (lower === '.1' || lower === '.2') {
+        return cmdDuplicateChoice(client, message, sender, lower);
+    }
 }
 
 module.exports = { handleGachaCommands };
