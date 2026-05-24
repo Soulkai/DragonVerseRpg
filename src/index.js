@@ -57,6 +57,7 @@ const { mercadoNegroCommand } = require('./commands/mercadoNegro');
 const { animeCommand, animeEpCommand } = require('./commands/anime'); 
 const { spawnCharacter } = require('./systems/gacha');
 const { checkAndGenerateRaids } = require('./systems/raids');
+const { handleGachaCommands } = require('./commands/gacha');
 
 // --- Importação de Serviços ---
 const { runEconomyMaintenance } = require('./services/economyService');
@@ -65,8 +66,10 @@ const { touchPlayerActivity } = require('./services/playerService');
 const { runAutoEvents } = require('./services/eventService');
 const { spotifySearch, spotifyDownload } = require('./services/spotifyService');
 const { processExpiredTravels } = require('./services/travelService');
+const { startGachaScheduler } = require('./services/gachaScheduler');
 
 migrate();
+startGachaScheduler();
 
 // ==========================================
 // 🌐 CONFIGURAÇÃO DO CLIENTE (Revisada)
@@ -123,7 +126,7 @@ client.on('ready', async () => {
 client.on('message', async (message) => {
     try {
         const groupId = message.from;
-        
+
         const eventConfig = db.prepare('SELECT is_enabled FROM event_chats WHERE chat_id = ?').get(groupId);
 
         if (eventConfig && eventConfig.is_enabled) {
@@ -141,13 +144,18 @@ client.on('message', async (message) => {
         runMaintenanceIfNeeded(false);
         touchPlayerActivity(message);
 
+        if (['gacha', 'banner', 'pullhistory', 'girar', 'girar10', 'up'].includes(command.name)) {
+            await handleGachaCommands(client, message, message.from, message.body || '');
+            return;
+        }
+
         switch (command.name) {
             case 'capturar': case 'capture': await capturarCommand(message, command); break;
             case 'raid': case 'raids': await raidCommand(message, command); break;
             case 'box': case 'boxe': case 'colecao': case 'coleção': await boxCommand(message, command); break;
             case 'dvi': case 'forbes': case 'ricos': case 'topricos': await dviCommand(message, command); break;
             case 'mercado': case 'mercadonegro': case 'blackmarket': await mercadoNegroCommand(message, command); break;
-            
+
             case 'anime':
             case 'anime2': 
                 await animeCommand(message, command); 
@@ -156,7 +164,7 @@ client.on('message', async (message) => {
             case 'animeep2': 
                 await animeEpCommand(message, command); 
                 break;
-            
+
             case 'registro': await registroCommand(message, command); break;
             case 'personagens': await personagensCommand(message, command); break;
             case 'players': case 'jogadores': await playersListCommand(message, command, client); break;
