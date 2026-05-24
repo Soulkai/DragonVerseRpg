@@ -8,12 +8,12 @@ const RAID_DURATION_DAYS = 14; // Dura 2 semanas
 const RAID_INTERVAL_DAYS = 30; // 1 Mês entre o início de uma e outra
 
 const BOSS_TEMPLATES = [
-    { name: "Vegeta Oozaru Selvagem", element: "Fisico", hp: 10000000 },
-    { name: "Imperador Freeza (100%)", element: "Trevas", hp: 50000000 },
-    { name: "Cell Super Perfeito", element: "Energia", hp: 150000000 },
-    { name: "Majin Boo (Pura Maldade)", element: "Magia", hp: 300000000 },
-    { name: "Jiren, o Cinzento", element: "Fogo", hp: 800000000 },
-    { name: "Goku Black (Rosé)", element: "Divino", hp: 1000000000 }
+    { name: "Vegeta Oozaru Selvagem", element: "Fisico", hp: 1000000 },
+    { name: "Imperador Freeza (100%)", element: "Trevas", hp: 5000000 },
+    { name: "Cell Super Perfeito", element: "Energia", hp: 15000000 },
+    { name: "Majin Boo (Pura Maldade)", element: "Magia", hp: 30000000 },
+    { name: "Jiren, o Cinzento", element: "Fogo", hp: 80000000 },
+    { name: "Goku Black (Rosé)", element: "Divino", hp: 100000000 }
 ];
 
 // Multiplicador por raridade na Raid
