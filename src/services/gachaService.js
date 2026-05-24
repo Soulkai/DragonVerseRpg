@@ -381,29 +381,60 @@ function resolveDuplicateChoice(playerId, choice) {
         return { success: true, resolved: 'duplicate' };
     }
 
-    if (choice === '2' || choice === 'item') {
-        // Identifica raridade do personagem
-        const char = db.prepare('SELECT rarity FROM character_catalog WHERE id = ?').get(pending.character_id);
-        const itemSlug = `up-level-${char.rarity.toLowerCase()}`;
-        const item = db.prepare('SELECT id, name FROM items_catalog WHERE slug = ?').get(itemSlug);
-
-        if (item) {
-            db.prepare(`
-                INSERT INTO player_inventory (player_id, item_id, item_name, quantity)
-                VALUES (?, ?, ?, 1)
-                ON CONFLICT(player_id, item_id)
-                DO UPDATE SET quantity = quantity + 1
-            `).run(playerId, item.id, item.name);
-        }
-
-        db.prepare("UPDATE gacha_pending_choices SET status = 'resolved' WHERE id = ?").run(pending.id);
-        db.prepare("UPDATE gacha_pull_history SET chosen_duplicate_action = 'item' WHERE id = ?").run(pending.history_id);
-        return { success: true, resolved: 'item', item };
+    if (choice === '2') {
+    const pending = getPendingDuplicate(playerId);
+    if (!pending) {
+        return { success: false, reason: 'no_pending' };
     }
 
-    return { success: false, reason: 'invalid_choice' };
-}
+    const slugMap = {
+        C: 'up-level-c',
+        U: 'up-level-u',
+        R: 'up-level-r',
+        S: 'up-level-s',
+        SS: 'up-level-ss',
+        SSS: 'up-level-sss',
+        UR: 'up-level-ur',
+        LR: 'up-level-lr',
+        Godly: 'up-level-godly'
+    };
 
+    const itemSlug = slugMap[pending.rarity];
+    if (!itemSlug) {
+        return { success: false, reason: 'item_not_found' };
+    }
+
+    const item = db.prepare(`
+        SELECT id, name
+        FROM items_catalog
+        WHERE slug = ?
+        LIMIT 1
+    `).get(itemSlug);
+
+    if (!item || !item.id) {
+        return { success: false, reason: 'item_not_found' };
+    }
+
+    db.prepare(`
+        INSERT INTO player_inventory (player_id, item_id, item_name, quantity, updated_at)
+        VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+        ON CONFLICT(player_id, item_id) DO UPDATE SET
+            quantity = quantity + 1,
+            item_name = excluded.item_name,
+            updated_at = CURRENT_TIMESTAMP
+    `).run(playerId, item.id, item.name);
+
+    clearPendingDuplicate(playerId);
+
+    return {
+        success: true,
+        resolved: 'item',
+        item: {
+            id: item.id,
+            name: item.name
+        }
+    };
+}
 // ──────────────────────────────────────────────
 // SISTEMA DE UP DE NÍVEL
 // ──────────────────────────────────────────────
