@@ -16,6 +16,19 @@ const BOSS_TEMPLATES = [
     { name: "Goku Black (Rosé)", element: "Divino", hp: 1000000000 }
 ];
 
+// Multiplicador por raridade na Raid
+const RARITY_RAID_MULTIPLIER = {
+    'C': 0.9,
+    'U': 1.0,
+    'R': 1.05,
+    'S': 1.15,
+    'SS': 1.25,
+    'SSS': 1.4,
+    'UR': 1.6,
+    'LR': 1.85,
+    'Godly': 2.2
+};
+
 // Sinergias Elementais (Quem bate em quem)
 const elementAdvantage = {
     'Fogo': ['Gelo', 'Natureza'],
@@ -26,7 +39,8 @@ const elementAdvantage = {
     'Luz': ['Trevas', 'Divino'],
     'Trevas': ['Magia', 'Fisico'],
     'Tecnologico': ['Magia'],
-    'Magia': ['Energia']
+    'Magia': ['Energia'],
+    'Omni': ['Fogo', 'Gelo', 'Energia', 'Fisico', 'Divino', 'Luz', 'Trevas', 'Tecnologico', 'magia']
 };
 
 function getSynergyMultiplier(playerElement, bossElement) {
@@ -127,7 +141,7 @@ function attackRaidBoss(playerId, charSlugs) {
     const playerDb = db.prepare("SELECT ki_atual FROM players WHERE id = ?").get(playerId);
     const baseKi = playerDb ? Number(playerDb.ki_atual || 1) : 1;
 
-    // Valida os 3 personagens
+    // Valida os personagens enviados
     for (let slug of charSlugs) {
         if (usedChars.includes(slug)) {
             return { error: `Estratégia inválida! Você já usou o personagem '${slug}' nesta Raid. Escolha outro lutador da sua coleção.` };
@@ -135,7 +149,13 @@ function attackRaidBoss(playerId, charSlugs) {
 
         // Verifica se o jogador REALMENTE tem o personagem na box
         const myChar = db.prepare(`
-            SELECT c.name, c.element, c.base_damage_mult, c.rarity 
+            SELECT 
+                c.name, 
+                c.element, 
+                c.base_damage_mult, 
+                c.rarity,
+                pc.level,
+                pc.duplicates
             FROM player_collection pc
             JOIN character_catalog c ON pc.character_id = c.id
             WHERE pc.player_id = ? AND c.slug = ?
@@ -143,9 +163,28 @@ function attackRaidBoss(playerId, charSlugs) {
 
         if (!myChar) return { error: `Você não possui o personagem '${slug}' na sua Box!` };
 
-        // Dano = Ki do player × raridade(mult) × sinergia elemental
         const synergy = getSynergyMultiplier(myChar.element, activeBoss.element);
-        const charDamage = Math.floor((baseKi * 1000) * myChar.base_damage_mult * synergy);
+        const rarityMult = RARITY_RAID_MULTIPLIER[myChar.rarity] || 1.0;
+
+        const level = Number(myChar.level || 1);
+        const duplicates = Number(myChar.duplicates || 0);
+
+        // Cada nível aumenta 3%, limitado a 60%
+        const levelMult = 1 + Math.min((level - 1) * 0.03, 0.60);
+
+        // Cada duplicata aumenta 5%, limitado a 50%
+        const duplicateMult = 1 + Math.min(duplicates * 0.05, 0.50);
+
+        const kiPower = baseKi * 1000;
+
+        const charDamage = Math.floor(
+            kiPower *
+            myChar.base_damage_mult *
+            rarityMult *
+            levelMult *
+            duplicateMult *
+            synergy
+        );
         
         totalDamage += charDamage;
         validatedChars.push(slug);
